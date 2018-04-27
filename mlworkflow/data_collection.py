@@ -22,6 +22,19 @@ def find_files(pattern="{}.dcp"):
     return lst
 
 
+def _create_file(filename):
+    dirname = os.path.dirname(filename)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
+    file = open(filename, "wb")
+    return file
+
+
+def _format_filename(filename):
+    return filename.format(datetime.datetime.now()
+                           .strftime("%Y%m%d_%H%M%S"))
+
+
 class _CheckPointWrapper(dict):
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -43,6 +56,19 @@ class _CheckPointFileWrapper(list):
                 return [l[key1] for l in super().__getitem__(key0)]
             return super().__getitem__(key0)[key1]
         return super().__getitem__(key)
+
+    def write_as(self, file="{}.dcp"):
+        if isinstance(file, str):
+            file = _format_filename(file)
+            with _create_file(file) as f:
+                self.write_as(f)
+            return file
+
+        pickler = pickle.Pickler(file)
+        for checkpoint_wrapper in self:
+            checkpoint = dict(checkpoint_wrapper)
+            pickler.dump(checkpoint)
+        return file
 
 
 class _CheckPointLibraryWrapper(dict):
@@ -162,7 +188,7 @@ class DataCollection(dict):
         super().__init__()
         self.history = _CheckPointFileWrapper([])
         if filename is not None:
-            filename = self.format_filename(filename)
+            filename = _format_filename(filename)
         self.filename = filename
         self.file = None
         self.pickler = None
@@ -184,23 +210,11 @@ class DataCollection(dict):
     def history_(self):
         return _CheckPointFileWrapper(self.history+[_CheckPointWrapper(self)])
 
-    @staticmethod
-    def format_filename(filename):
-        return filename.format(datetime.datetime.now()
-                               .strftime("%Y%m%d_%H%M%S"))
-
-    def _create_file(self, filename):
-        dirname = os.path.dirname(filename)
-        if dirname:
-            os.makedirs(dirname, exist_ok=True)
-        file = open(filename, "wb")
-        return file
-
     def _checkpoint(self, checkpoint):
         self.history.append(_CheckPointWrapper(checkpoint))
         if self.filename is not None:
             if self.file is None:
-                self.file = self._create_file(self.filename)
+                self.file = _create_file(self.filename)
                 self.pickler = pickle.Pickler(self.file)
             self.pickler.dump(checkpoint)
 
@@ -211,18 +225,6 @@ class DataCollection(dict):
                       for name in names}
         self._checkpoint(checkpoint)
         return checkpoint
-
-    def write_history(self, file="{}.dcp"):
-        if isinstance(file, str):
-            file = self.format_filename(file)
-            with self._create_file(file) as f:
-                self.write_history(f)
-            return file
-
-        pickler = pickle.Pickler(file)
-        for checkpoint_wrapper in self.history:
-            checkpoint = dict(checkpoint_wrapper)
-            pickler.dump(checkpoint)
 
     def close(self):
         if self.file is not None:
