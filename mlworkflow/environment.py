@@ -82,15 +82,15 @@ class _Call_v0(Evaluable):
     def __repr__(self):
         kwargs = args = ""
         if self.args:
-            args = ".with_args({})".format(",".join(repr(arg)
-                                                    for arg in self.args))
+            args = ".with_args({})".format(", ".join(repr(arg)
+                                                     for arg in self.args))
         if self.kwargs:
-            kwargs = "({})".format(",".join("{}={!r}".format(k, v)
-                                            for k, v in self.kwargs.items()))
-        return "Call({!r},{!r}){}{}".format(*self.reference, args, kwargs)
+            kwargs = "({})".format(", ".join("{}={!r}".format(k, v)
+                                             for k, v in self.kwargs.items()))
+        return "Call{!r}{}{}".format(self.reference, args, kwargs)
 
     def __str__(self):
-        s = ["Call({!r},{!r})".format(*self.reference)]
+        s = ["Call{!r}".format(self.reference)]
         indentation = " "*2
         nl_indent = "\n{}".format(indentation)
         if self.kwargs:
@@ -153,7 +153,7 @@ class _Environment_v0(dict):
     >>> env.run("b")
     compute b
     >>> env.fused
-    {'a': Call('builtins','print').with_args('compute a',Ref('b')),
+    {'a': Call('builtins', 'print').with_args('compute a', Ref('b')),
      'b': None}
     >>> env.run(["a", "b"])
     compute a None
