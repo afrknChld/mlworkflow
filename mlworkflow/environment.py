@@ -49,7 +49,7 @@ def no_dsl():
 no_dsl.dsl_enabled = True
 
 
-class _Call_v0(Evaluable):
+class Call(Evaluable):
     """A malleable and picklable representation for a call.
 
     >>> call = Call(print).with_args("a", "b")(sep=",")
@@ -75,11 +75,8 @@ class _Call_v0(Evaluable):
         self.args = args
         self.kwargs = kwargs
 
-    def __getstate__(self):
-        return self.reference, self.args, self.kwargs
-
-    def __setstate__(self, state):
-        self.reference, self.args, self.kwargs = state
+    def __reduce__(self):
+        return _Call_v0, (self.reference, self.args, self.kwargs)
 
     def __getitem__(self, key):
         if isinstance(key, tuple):
@@ -89,18 +86,18 @@ class _Call_v0(Evaluable):
         return self.kwargs[key]
 
     def on(self, callable, modattr=None):
-        return _Call_v0(callable, modattr, args=self.args, kwargs=self.kwargs)
+        return Call(callable, modattr, args=self.args, kwargs=self.kwargs)
 
     def with_args(self, *args):
         new_args = sum(((_transform_call_arg(arg),)
                         if arg is not Ellipsis else self.args
                         for arg in args), ())
-        return _Call_v0(*self.reference, args=new_args, kwargs=self.kwargs)
+        return Call(*self.reference, args=new_args, kwargs=self.kwargs)
 
     def __call__(self, **kwargs):
         new_kwargs = {**self.kwargs, **{k: _transform_call_arg(v)
                                         for k, v in kwargs.items()}}
-        return _Call_v0(*self.reference, args=self.args, kwargs=new_kwargs)
+        return Call(*self.reference, args=self.args, kwargs=new_kwargs)
 
     @property
     def resolved_target(self):
@@ -145,7 +142,7 @@ class _Call_v0(Evaluable):
             s.append("(")
             s.append(nl_indent)
             for k, v in self.kwargs.items():
-                _v = str(v) if isinstance(v, _Call_v0) else repr(v)
+                _v = str(v) if isinstance(v, Call) else repr(v)
                 head = k+"="
                 s.append(head)
                 _nl_indent = nl_indent + " "*len(head)
@@ -157,7 +154,7 @@ class _Call_v0(Evaluable):
             s.append(".with_args(")
             s.append(nl_indent)
             for arg in self.args:
-                _v = str(arg) if isinstance(arg, _Call_v0) else repr(arg)
+                _v = str(arg) if isinstance(arg, Call) else repr(arg)
                 s.append(nl_indent.join(_v.split("\n")))
                 s.append(",\n" + indentation)
             s[-1] = s[-1][1:-1]  # remove comma and space
@@ -165,7 +162,7 @@ class _Call_v0(Evaluable):
         return "".join(s)
 
 
-class _Ref_v0(Evaluable):
+class Ref(Evaluable):
     """A reference to a root element of a computation graph"""
 
     def __init__(self, name):
@@ -178,7 +175,7 @@ class _Ref_v0(Evaluable):
         return "Ref({!r})".format(self.name)
 
 
-class _Unique_v0(_Ref_v0):
+class Unique(Ref):
     """A reference to a root element of a computation graph for which
     computation won't use the cache"""
     def eval(self, env):
@@ -188,7 +185,7 @@ class _Unique_v0(_Ref_v0):
         return "Unique({!r})".format(self.name)
 
 
-class _Environment_v0(dict):
+class Environment(dict):
     """A malleable and persistent representation for a computation graph
 
     >>> env = Environment(a=Call(print).with_args("compute a", "@b"),
@@ -219,15 +216,26 @@ class _Environment_v0(dict):
         super().__init__(*args, **kwargs)
         self.cache = {}
 
-    def __getstate__(self):
-        return dict(self)
+    def __reduce__(self):
+        return _Environment_v0, (dict(self),)
 
-    def __setstate__(self, state):
-        return self.__init__(state)
+    def __setitem__(self, key, value):
+        """
+        >>> env = Environment()
+        >>> env["a"] = "b"
+        >>> env.update(b="c")
+        >>> env.run(["a", "b"])
+        ['b', 'c']
+        """
+        self.cache.pop(key, None)
+        return super().__setitem__(key, value)
 
-    @property
-    def fused(self):
-        return _Environment_v0({**self, **self.cache})
+    def update(self, *args, **kwargs):
+        to_remove = {}  # empty dict on which we simulate the update
+        to_remove.update(*args, **kwargs)
+        for k in to_remove:
+            self.cache.pop(k, None)
+        return super().update(*args, **kwargs)
 
     def run(self, name):
         if isinstance(name, list):
@@ -235,8 +243,16 @@ class _Environment_v0(dict):
         value = self.cache.get(name, _no_value)
         if value is not _no_value:
             return value
-        value = self.cache[name] = self[name].eval(self)
+        # Not in the cache, evaluate if Evaluable
+        value = self[name]
+        if isinstance(value, Evaluable):
+            value = value.eval(self)
+        self.cache[name] = value
         return value
+
+    @property
+    def fused(self):
+        return Environment({**self, **self.cache})
 
     def clean(self):
         self.cache = {}
@@ -251,7 +267,7 @@ class _Environment_v0(dict):
                 head = "{}=".format(k)
                 s.append(head)
                 _nl_indent = nl_indent + " "*len(head)
-                _v = str(v) if isinstance(v, (_Call_v0, _Environment_v0)) else repr(v)
+                _v = str(v) if isinstance(v, (Call, Environment)) else repr(v)
                 s.append(_nl_indent.join(_v.split("\n")))
                 s.append(",")
             s[-1] = ""
@@ -259,11 +275,15 @@ class _Environment_v0(dict):
         s.append(")")
         return "".join(s)
 
+
 # Versioning as those classes may well get pickled and evolve
-Call = _Call_v0
-Ref = _Ref_v0
-Unique = _Unique_v0
-Environment = _Environment_v0
+def _Environment_v0(dic):
+    return Environment(dic)
+
+
+def _Call_v0(reference, args, kwargs):
+    return Call(*reference, args=args, kwargs=kwargs)
+
 
 if __name__ == "__main__":
     import doctest
