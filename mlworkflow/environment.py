@@ -168,6 +168,9 @@ class Ref(Evaluable):
     def __init__(self, name):
         self.name = name
 
+    def __reduce__(self):
+        return _Ref_v0, (self.name,)
+
     def eval(self, env):
         return env.run(self.name)
 
@@ -178,6 +181,10 @@ class Ref(Evaluable):
 class Unique(Ref):
     """A reference to a root element of a computation graph for which
     computation won't use the cache"""
+
+    def __reduce__(self):
+        return _Unique_v0, (self.name,)
+
     def eval(self, env):
         return env[self.name].eval(env)
 
@@ -283,6 +290,14 @@ def _Environment_v0(dic):
 
 def _Call_v0(reference, args, kwargs):
     return Call(*reference, args=args, kwargs=kwargs)
+
+
+def _Ref_v0(name):
+    return Ref(name)
+
+
+def _Unique_v0(name):
+    return Unique(name)
 
 
 if __name__ == "__main__":
