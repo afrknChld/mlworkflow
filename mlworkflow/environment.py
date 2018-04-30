@@ -76,7 +76,7 @@ class Call(Evaluable):
         self.kwargs = kwargs
 
     def __reduce__(self):
-        return _Call_v0, (self.reference, self.args, self.kwargs)
+        return Call._v0, (self.reference, self.args, self.kwargs)
 
     def __getitem__(self, key):
         if isinstance(key, tuple):
@@ -161,6 +161,10 @@ class Call(Evaluable):
             s.append(")")
         return "".join(s)
 
+    @staticmethod
+    def _v0(reference, args, kwargs):
+        return Call(*reference, args=args, kwargs=kwargs)
+
 
 class Ref(Evaluable):
     """A reference to a root element of a computation graph"""
@@ -169,7 +173,7 @@ class Ref(Evaluable):
         self.name = name
 
     def __reduce__(self):
-        return _Ref_v0, (self.name,)
+        return Ref._v0, (self.name,)
 
     def eval(self, env):
         return env.run(self.name)
@@ -177,19 +181,27 @@ class Ref(Evaluable):
     def __repr__(self):
         return "Ref({!r})".format(self.name)
 
+    @staticmethod
+    def _v0(name):
+        return Ref(name)
+
 
 class Unique(Ref):
     """A reference to a root element of a computation graph for which
     computation won't use the cache"""
 
     def __reduce__(self):
-        return _Unique_v0, (self.name,)
+        return Unique._v0, (self.name,)
 
     def eval(self, env):
         return env[self.name].eval(env)
 
     def __repr__(self):
         return "Unique({!r})".format(self.name)
+
+    @staticmethod
+    def _v0(name):
+        return Unique(name)
 
 
 class Environment(dict):
@@ -224,7 +236,7 @@ class Environment(dict):
         self.cache = {}
 
     def __reduce__(self):
-        return _Environment_v0, (dict(self),)
+        return Environment._v0, (dict(self),)
 
     def __setitem__(self, key, value):
         """
@@ -282,22 +294,9 @@ class Environment(dict):
         s.append(")")
         return "".join(s)
 
-
-# Versioning as those classes may well get pickled and evolve
-def _Environment_v0(dic):
-    return Environment(dic)
-
-
-def _Call_v0(reference, args, kwargs):
-    return Call(*reference, args=args, kwargs=kwargs)
-
-
-def _Ref_v0(name):
-    return Ref(name)
-
-
-def _Unique_v0(name):
-    return Unique(name)
+    @staticmethod
+    def _v0(dic):
+        return Environment(dic)
 
 
 if __name__ == "__main__":
