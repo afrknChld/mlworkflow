@@ -216,6 +216,15 @@ class Exec(Evaluable, dict):
     >>> env.run("someValues") == {"a": 1, "b": 2, "env": env}
     Code finished running
     True
+
+    But we can also use them as simple in-place functions
+    >>> env["x"] = Exec('''
+    ... a, b = 1, 2
+    ... c = a + b
+    ... set_result(c)
+    ... ''')
+    >>> env.run("x")
+    3
     """
     def __init__(self, code):
         self.code = code
@@ -225,8 +234,15 @@ class Exec(Evaluable, dict):
 
     def eval(self, env=None):
         loc = {}
-        exec(self.code, dict(_env=env), loc)
-        return loc
+        _result = _no_value
+        def set_result(result):
+            nonlocal _result
+            _result = result
+        exec(self.code, dict(_env=env, set_result=set_result), loc)
+        if _result is _no_value:
+            return loc
+        else:
+            return _result
 
     def __repr__(self):
         return "Exec({!r})".format(self.code)
