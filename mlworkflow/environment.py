@@ -120,6 +120,8 @@ class Call(Evaluable):
         return self.resolved_target(*args, **kwargs)
 
     def __eq__(self, other):
+        if not isinstance(other, Call):
+            return False
         return (self.reference == other.reference and
                 self.args == other.args and
                 self.kwargs == other.kwargs)
@@ -169,39 +171,31 @@ class Call(Evaluable):
 class Ref(Evaluable):
     """A reference to a root element of a computation graph"""
 
-    def __init__(self, name):
+    def __init__(self, name, *keys):
         self.name = name
+        self.keys = keys
 
     def __reduce__(self):
-        return Ref._v0, (self.name,)
+        return Ref._v0, (self.name,) + self.keys
 
     def eval(self, env):
-        return env.run(self.name)
+        item = env.run(self.name)
+        for k in self.keys:
+            item = item[k]
+        return item
+
+    def __eq__(self, other):
+        if not isinstance(other, Ref):
+            return False
+        return self.name == other.name and self.keys == other.keys
 
     def __repr__(self):
-        return "Ref({!r})".format(self.name)
+        return "Ref({})".format(", ".join(repr(k)
+                                          for k in ((self.name,) + self.keys)))
 
     @staticmethod
     def _v0(name):
         return Ref(name)
-
-
-class Unique(Ref):
-    """A reference to a root element of a computation graph for which
-    computation won't use the cache"""
-
-    def __reduce__(self):
-        return Unique._v0, (self.name,)
-
-    def eval(self, env):
-        return env[self.name].eval(env)
-
-    def __repr__(self):
-        return "Unique({!r})".format(self.name)
-
-    @staticmethod
-    def _v0(name):
-        return Unique(name)
 
 
 class Exec(Evaluable, dict):
@@ -211,6 +205,7 @@ class Exec(Evaluable, dict):
     ... a = 1
     ... b = 2
     ... env = _env
+    ... _z = "not exported"
     ... print("Code finished running")
     ... '''))
     >>> env.run("someValues") == {"a": 1, "b": 2, "env": env}
@@ -219,38 +214,86 @@ class Exec(Evaluable, dict):
 
     But we can also use them as simple in-place functions
     >>> env["x"] = Exec('''
-    ... a, b = 1, 2
+    ... someValues = _env.run("someValues")
+    ... a, b = someValues["a"], someValues["b"]
     ... c = a + b
-    ... set_result(c)
+    ... _set_result(c)
     ... ''')
     >>> env.run("x")
     3
+
+    >>> env["y"] = Exec('''
+    ... #@export d
+    ... d = someValues["a"] + someValues["b"]
+    ... e = d + someValues["a"] + someValues["b"]
+    ... ''', cross_refs=True)
+    >>> env.run("y") == {"d": 3}
+    True
+    >>> env.run("d")
+    3
     """
-    def __init__(self, code):
+    def __init__(self, code, cross_refs=False):
         self.code = code
+        self.cross_refs = cross_refs
 
     def __reduce__(self):
-        return Exec._v0, (self.code,)
+        return Exec._v0, (self.code, self.cross_refs)
 
     def eval(self, env=None):
-        loc = {}
         _result = _no_value
         def set_result(result):
             nonlocal _result
             _result = result
-        exec(self.code, dict(_env=env, set_result=set_result), loc)
-        if _result is _no_value:
-            return loc
-        else:
+        locs = Exec._Locals(env, _env=env, _set_result=set_result)
+        exec(self.code, locs)
+        if _result is not _no_value:
             return _result
+        # If there are @export comments, use them, otherwise, all non
+        # _-beginning variables are exported
+        exported = set(sum((line.split()[1:]
+                            for line in self.code.split("\n")
+                            if line.startswith("#@export ")), []))
+        if not exported:
+            exported = set(k for k in locs if not k.startswith("_"))
+        # Only retain exported variables
+        locs = {k:v for k, v in locs.items() if k in exported}
+        if self.cross_refs:
+            assert env[env.current] == self, ("Cannot run a non root Exec "
+                                              "with cross_refs option")
+            for n in locs:
+                ref = Ref(env.current, n)
+                current_item = env.get(n, _no_value)
+                assert current_item is _no_value or ref == current_item, \
+                    ("Variable {!r} was already defined in field {!r}." 
+                     .format(n, current_item.name))
+                env[n] = ref
+        return locs
+
+    class _Locals(dict):
+        def __init__(self, env, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.env = env
+
+        def __getitem__(self, key):
+            value = super().get(key, _no_value)
+            if value is not _no_value:
+                return value
+            if key in self.env:
+                return self.env.run(key)
+            else:
+                raise KeyError(key)
+
+    def __str__(self):
+        return ("Exec('''\n{}\n''', cross_refs={!r})"
+                .format(self.code.replace("'''", r'\'\'\''), self.cross_refs))
 
     def __repr__(self):
-        return "Exec({!r})".format(self.code)
+        return "Exec({!r}, cross_refs={!r})".format(self.code, self.cross_refs)
 
     @staticmethod
-    def _v0(code):
-        return Exec(code)
-
+    def _v0(code, cross_refs=False):
+        return Exec(code, cross_refs=cross_refs)
+            
 
 class Environment(dict):
     """A malleable and persistent representation for a computation graph
@@ -282,6 +325,8 @@ class Environment(dict):
     True
     """
 
+    current = _no_value
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cache = dict(_env=self)
@@ -311,13 +356,15 @@ class Environment(dict):
         if isinstance(name, list):
             return [self.run(n) for n in name]
         value = self.cache.get(name, _no_value)
-        if value is not _no_value:
-            return value
-        # Not in the cache, evaluate if Evaluable
-        value = self[name]
-        if isinstance(value, Evaluable):
-            value = value.eval(self)
-        self.cache[name] = value
+        if value is _no_value:
+            # Not in the cache, evaluate if Evaluable
+            value = self[name]
+            if isinstance(value, Evaluable):
+                _current = self.current
+                self.current = name
+                value = value.eval(self)
+                self.current = _current
+            self.cache[name] = value
         return value
 
     @property
@@ -344,7 +391,9 @@ class Environment(dict):
                 head = "{}=".format(k)
                 s.append(head)
                 _nl_indent = nl_indent + " "*len(head)
-                _v = str(v) if isinstance(v, (Call, Environment)) else repr(v)
+                _v = str(v) \
+                    if isinstance(v, (Call, Environment, Exec)) \
+                    else repr(v)
                 s.append(_nl_indent.join(_v.split("\n")))
                 s.append(",")
             s[-1] = ""
@@ -355,6 +404,24 @@ class Environment(dict):
     @staticmethod
     def _v0(dic):
         return Environment(dic)
+
+
+try:
+    from IPython import get_ipython
+    from IPython.core.magic import register_cell_magic
+except ImportError:
+    pass
+else:
+    _ip = get_ipython()
+    if _ip is not None:
+        @register_cell_magic
+        def with_env(line, cell):
+            env, name, *flags = line.split(" ")
+            env = _ip.user_global_ns[env]
+            env[name] = Exec(cell, cross_refs=True)
+            res = env.run(name)
+            if "silent" not in flags:
+                return res
 
 
 if __name__ == "__main__":
