@@ -308,12 +308,10 @@ class Exec(Evaluable, dict):
             for n in locs:
                 ref = Ref("{}@{}".format(env.current, n))
                 current_item = env.get(n, _no_value)
-                if current_item is _no_value:
-                    env[n] = ref
-                else:
-                    assert ref == current_item, \
-                        ("Variable {!r} was already defined as {!r}." 
-                        .format(n, current_item))
+                assert current_item is _no_value or ref == current_item, \
+                    ("Variable {!r} was already defined as {!r}." 
+                     .format(n, current_item))
+                env[n] = ref  # Set and erase the potential cache
         return locs
 
     class _Locals(dict):
@@ -547,8 +545,11 @@ else:
         def with_env(line, cell):
             env, name, *flags = line.split(" ")
             env = _ip.user_global_ns[env]
-            env[name] = Exec(cell)
-            res = env.run(name, gen_refs=True)
+            if name == "/":
+                res = Exec(cell).eval(env)
+            else:
+                env[name] = Exec(cell)
+                res = env.run(name, gen_refs=True)
             if "silent" not in flags:
                 return res
 
