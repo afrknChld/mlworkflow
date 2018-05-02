@@ -81,6 +81,11 @@ class GlobalRef(Evaluable):
         module = importlib.import_module(self.module)
         return _resolve_attr(module, self.path, first_accessor=".")
 
+    def __eq__(self, other):
+        if not isinstance(other, GlobalRef):
+            return False
+        return self.module == other.module and self.path == other.path
+
     def __repr__(self):
         return "GlobalRef({!r}, {!r})".format(self.module, self.path)
 
@@ -440,6 +445,30 @@ class Environment(dict):
                               if k != "_env" or "_env" in self
                              }
         return Environment({**self, **cache_without_self})
+
+    def __delitem__(self, key):
+        """
+        >>> env = Environment(a=3, b=4)
+        >>> env.run(["a", "b"])
+        [3, 4]
+        >>> del env["a"]
+        >>> env.run("a")
+        Traceback (most recent call last):
+            ...
+        KeyError: 'a'
+        >>> env.pop("b")
+        4
+        >>> env.run("b")
+        Traceback (most recent call last):
+            ...
+        KeyError: 'b'
+        """
+        self.cache.pop(key, None)
+        return super().__delitem__(key)
+    
+    def pop(self, key, *args):
+        self.cache.pop(key, None)
+        return super().pop(key, *args)
 
     def clean(self):
         if self.get("_env", _no_value) is _no_value:
