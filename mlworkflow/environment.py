@@ -324,7 +324,11 @@ class Exec(Evaluable, dict):
             if value is not _no_value:
                 return value
             if key in self.env:
-                return self.env.run(key)
+                try:
+                    return self.env.run(key)
+                except Exception as e:
+                    raise Exception("An exception was thrown while "
+                                    "computing {!r}".format(key))
             else:
                 raise KeyError(key)
 
@@ -431,8 +435,10 @@ class Environment(dict):
             value = self[name]
             if isinstance(value, Evaluable):
                 self.running_stack.append(name)
-                value = value.eval(self, **kwargs)
-                self.running_stack.pop()
+                try:
+                    value = value.eval(self, **kwargs)
+                finally:
+                    self.running_stack.pop()
             self.cache[name] = value
         return value
 
