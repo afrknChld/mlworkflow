@@ -259,20 +259,19 @@ class Exec(Evaluable, dict):
     ... #@export d
     ... d = someValues["a"] + someValues["b"]
     ... e = d + someValues["a"] + someValues["b"]
-    ... ''', gen_refs=True)
-    >>> env.run("y") == {"d": 3}
+    ... ''')
+    >>> env.run("y", gen_refs=True) == {"d": 3}
     True
     >>> env.run("d")
     3
     """
-    def __init__(self, code, gen_refs=False):
+    def __init__(self, code):
         self.code = code
-        self.gen_refs = gen_refs
 
     def __reduce__(self):
-        return Exec._v0, (self.code, self.gen_refs)
+        return Exec._v0, (self.code,)
 
-    def eval(self, env=None):
+    def eval(self, env=None, gen_refs=False):
         _result = _no_value
         def set_result(result):
             nonlocal _result
@@ -290,16 +289,18 @@ class Exec(Evaluable, dict):
             exported = set(k for k in locs if not k.startswith("_"))
         # Only retain exported variables
         locs = {k:v for k, v in locs.items() if k in exported}
-        if self.gen_refs:
+        if gen_refs:
             assert env[env.current] == self, ("Cannot run a non root Exec "
                                               "with gen_refs option")
             for n in locs:
                 ref = Ref("{}@{}".format(env.current, n))
                 current_item = env.get(n, _no_value)
-                assert current_item is _no_value or ref == current_item, \
-                    ("Variable {!r} was already defined in field {!r}." 
-                     .format(n, current_item.name))
-                env[n] = ref
+                if current_item is _no_value:
+                    env[n] = ref
+                else:
+                    assert ref == current_item, \
+                        ("Variable {!r} was already defined as {!r}." 
+                        .format(n, current_item))
         return locs
 
     class _Locals(dict):
@@ -317,16 +318,16 @@ class Exec(Evaluable, dict):
                 raise KeyError(key)
 
     def __str__(self):
-        return ("Exec('''\n{}\n''', gen_refs={!r})"
-                .format(self.code.replace("'''", r'\'\'\''), self.gen_refs))
+        return ("Exec('''\n{}\n''')"
+                .format(self.code.replace("'''", r'\'\'\'')))
 
     def __repr__(self):
-        return "Exec({!r}, gen_refs={!r})".format(self.code, self.gen_refs)
+        return "Exec({!r})".format(self.code)
 
     @staticmethod
-    def _v0(code, gen_refs=False):
-        return Exec(code, gen_refs=gen_refs)
-            
+    def _v0(code):
+        return Exec(code)
+
 
 class Environment(dict):
     """A malleable and persistent representation for a computation graph
@@ -397,7 +398,7 @@ class Environment(dict):
             self.cache.pop(k, None)
         return super().update(*args, **kwargs)
 
-    def run(self, name):
+    def run(self, name, **kwargs):
         if isinstance(name, list):
             return [self.run(n) for n in name]
         value = self.cache.get(name, _no_value)
@@ -407,7 +408,7 @@ class Environment(dict):
             if isinstance(value, Evaluable):
                 _current = self.current
                 self.current = name
-                value = value.eval(self)
+                value = value.eval(self, **kwargs)
                 self.current = _current
             self.cache[name] = value
         return value
@@ -463,8 +464,8 @@ else:
         def with_env(line, cell):
             env, name, *flags = line.split(" ")
             env = _ip.user_global_ns[env]
-            env[name] = Exec(cell, gen_refs=True)
-            res = env.run(name)
+            env[name] = Exec(cell)
+            res = env.run(name, gen_refs=True)
             if "silent" not in flags:
                 return res
 
