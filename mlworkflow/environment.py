@@ -267,6 +267,13 @@ class Exec(Evaluable, dict):
     3
     """
     def __init__(self, code):
+        from textwrap import _leading_whitespace_re
+        code = code.split("\n")
+        _ind = min(len(x.group(1))
+                   for line in code
+                   for x in (_leading_whitespace_re.match(line),)
+                   if x is not None)
+        code = "\n".join(line[_ind:] for line in code).strip()
         self.code = code
 
     def __reduce__(self):
@@ -319,8 +326,15 @@ class Exec(Evaluable, dict):
                 raise KeyError(key)
 
     def __str__(self):
-        return ("Exec('''\n{}\n''')"
-                .format(self.code.replace("'''", r'\'\'\'')))
+        body = repr(self.code)
+        if "\\n" in body:
+            quote = body[0]
+            body = body[1:-1].replace("\\n", '\n')
+            body = ("{quote}{quote}{quote}\n"
+                    "{}\n"
+                    "{quote}{quote}{quote}"
+                    .format(body, quote=quote))
+        return "Exec({})".format(body)
 
     def __repr__(self):
         return "Exec({!r})".format(self.code)
