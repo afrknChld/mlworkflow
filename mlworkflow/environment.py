@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
+from collections import defaultdict
 import re
 
 _no_value = object()
@@ -359,11 +360,10 @@ class Environment(dict):
     True
     """
 
-    current = _no_value
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.cache = dict(_env=self)
+        self.running_stack = []
+        self.clean()
 
     def __reduce__(self):
         return Environment._v0, (dict(self),)
@@ -388,28 +388,34 @@ class Environment(dict):
         >>> env.run(["a", "b"])
         ['b', 'c']
         """
-        self.cache.pop(key, None)
+        self._clean(key)
         return super().__setitem__(key, value)
 
     def update(self, *args, **kwargs):
         to_remove = {}  # empty dict on which we simulate the update
         to_remove.update(*args, **kwargs)
-        for k in to_remove:
-            self.cache.pop(k, None)
+        self._clean(*to_remove)
         return super().update(*args, **kwargs)
+
+    @property
+    def current(self):
+        return self.running_stack[-1]
 
     def run(self, name, **kwargs):
         if isinstance(name, list):
             return [self.run(n) for n in name]
+        for running in self.running_stack:
+            # For computing running, we need "name"
+            self.requires[running].add(name)
+            self.required_by[name].add(running)
         value = self.cache.get(name, _no_value)
         if value is _no_value:
             # Not in the cache, evaluate if Evaluable
             value = self[name]
             if isinstance(value, Evaluable):
-                _current = self.current
-                self.current = name
+                self.running_stack.append(name)
                 value = value.eval(self, **kwargs)
-                self.current = _current
+                self.running_stack.pop()
             self.cache[name] = value
         return value
 
@@ -426,6 +432,40 @@ class Environment(dict):
             self.cache = dict(_env=self)
         else:
             self.cache = {}
+        self.required_by = defaultdict(set)
+        self.requires = defaultdict(set)
+
+    def _clean(self, *names):
+        """Cleans the dependency graph
+        >>> env = Environment(
+        ...     a=Call(print).with_args("a", Ref("b")),
+        ...     b=Call(print).with_args("b", Ref("c")),
+        ...     c=Call(print).with_args("c", "Finally!")
+        ... )
+        >>> env.run("a")
+        c Finally!
+        b None
+        a None
+        >>> env["b"] = None
+        >>> list(env.cache.keys())
+        ['_env', 'c']
+        >>> env.run("a")
+        a None
+        >>> env["c"] = None
+        >>> set(env.cache.keys()) == set(['_env', 'a', 'b'])
+        True
+        """
+        to_clean = list(names)
+        while to_clean:
+            name = to_clean.pop()
+            self.cache.pop(name, None)
+            # requirements will be recomputed on next evaluation
+            requirements = self.requires.pop(name, ())
+            for req in requirements:  # This does not require anything anymore
+                self.required_by[req].discard(name)
+            # also clean the ones for which CURRENT is required
+            to_refresh = self.required_by.pop(name, ())
+            to_clean.extend(to_refresh)
 
     def __str__(self):
         indentation = " "*2
