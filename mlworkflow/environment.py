@@ -367,6 +367,18 @@ class Environment(dict):
     def __reduce__(self):
         return Environment._v0, (dict(self),)
 
+    def __getitem__(self, key):
+        """
+        >>> env = Environment(training_keys="a", testing_keys="b")
+        >>> env["training_keys"]
+        'a'
+        >>> env[["training_keys", "testing_keys"]]
+        ['a', 'b']
+        """
+        if isinstance(key, list):
+            return [self[k] for k in key]
+        return super().__getitem__(key)
+
     def __setitem__(self, key, value):
         """
         >>> env = Environment()
