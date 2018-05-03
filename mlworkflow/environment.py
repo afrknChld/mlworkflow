@@ -438,6 +438,28 @@ class Environment(dict):
     def current(self):
         return self.running_stack[-1]
 
+    def feed(self, feed_dict, feed_cache=True):
+        """Returns a copied environment with updated fields
+
+        >>> env = Environment(a=Call(print).with_args("Compute a"),
+        ...                   b=Call(print).with_args("Compute b", "@a"))
+        >>> env.run("a")
+        Compute a
+        >>> env.feed({"a":", great!"}).run("b")
+        Compute b , great!
+        >>> env.run("b")
+        Compute b None
+        """
+        copy = Environment(self)
+        copy.cache.update(self.cache)
+        copy.required_by.update(self.required_by)
+        copy.requires.update(self.requires)
+        if feed_cache:
+            copy.cache.update(feed_dict)
+        else:
+            copy.update(feed_dict)
+        return copy
+
     def run(self, name, **kwargs):
         if isinstance(name, list):
             return [self.run(n) for n in name]
