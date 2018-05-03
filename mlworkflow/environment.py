@@ -256,7 +256,7 @@ class Exec(Evaluable, dict):
     ... someValues = _env.run("someValues")
     ... a, b = someValues["a"], someValues["b"]
     ... c = a + b
-    ... _set_result(c)
+    ... _return(c)
     ... ''')
     >>> env.run("x")
     3
@@ -284,24 +284,27 @@ class Exec(Evaluable, dict):
     def __reduce__(self):
         return Exec._v0, (self.code,)
 
-    def eval(self, env=None, gen_refs=False):
+    def eval(self, env=None, *, leak_in=None, leak_out=None, gen_refs=False):
         _result = _no_value
-        def set_result(result):
-            nonlocal _result
-            _result = result
-        locs = Exec._Locals(env, _env=env, _set_result=set_result)
-        exec(self.code, locs)
+        def _return(result):
+            raise Exec._ReturnException(result)
+        # Build the python environment
+        leak_in = dict(leak_in) if leak_in is not None else {}
+        leak_in.update(_env=env, _return=_return)
+        locs = Exec._Locals(env, leak_in)
+        # Execute, handle return and leak_out updating
+        try:
+            exec(self.code, locs)
+        except Exec._ReturnException as ret_exc:
+            _result = ret_exc.args[0]
+        finally:
+            if leak_out is not None:
+                leak_out.update(locs)
         if _result is not _no_value:
             return _result
-        # If there are @export comments, use them, otherwise, all non
-        # _-beginning variables are exported
-        exported = set(sum((line.split()[1:]
-                            for line in self.code.split("\n")
-                            if line.startswith("#@export ")), []))
-        if not exported:
-            exported = set(k for k in locs if not k.startswith("_"))
-        # Only retain exported variables
-        locs = {k:v for k, v in locs.items() if k in exported}
+        # Handle the return and the generation of new references if needed
+        to_export = self._to_export(env=env, leak_in=leak_in, locals=locs)
+        locs = {k:v for k, v in locs.items() if k in to_export}
         if gen_refs:
             assert env[env.current] == self, ("Cannot run a non root Exec "
                                               "with gen_refs option")
@@ -313,6 +316,19 @@ class Exec(Evaluable, dict):
                      .format(n, current_item))
                 env[n] = ref  # Set and erase the potential cache
         return locs
+
+    def _to_export(self, *, env, leak_in, locals):
+        # If there are @export comments, use them, otherwise, all non
+        # _-beginning variables are to_export
+        to_export = set(sum((line.split()[1:]
+                            for line in self.code.split("\n")
+                            if line.startswith("#@export ")), []))
+        if not to_export:
+            to_export = set(k for k in locals if not k.startswith("_"))
+        return to_export
+
+    class _ReturnException(Exception):
+        pass
 
     class _Locals(dict):
         def __init__(self, env, *args, **kwargs):
@@ -551,11 +567,27 @@ else:
         def with_env(line, cell):
             env, name, *flags = line.split(" ")
             env = _ip.user_global_ns[env]
+            if "leak_in" in flags or "leak" in flags:
+                assert name == "/", \
+                    ("Leaking-in is only valid with '/' as name. Indeed, you "
+                     "will not want your environment to contain all of the "
+                     "IPython global vars")
+                # Filter the IPython's global ns for the items the environment
+                # will compute.
+                leak_in = {k: v
+                           for k, v in _ip.user_global_ns.items()
+                           if k not in env}
+            else:
+                leak_in = None
+            leak_out = _ip.user_global_ns \
+                if "leak_out" in flags or "leak" in flags \
+                else None
             if name == "/":
-                res = Exec(cell).eval(env)
+                res = Exec(cell).eval(env, leak_in=leak_in, leak_out=leak_out)
             else:
                 env[name] = Exec(cell)
-                res = env.run(name, gen_refs=True)
+                res = env.run(name, leak_in=leak_in, leak_out=leak_out,
+                              gen_refs=True)
             if "silent" not in flags:
                 return res
 
