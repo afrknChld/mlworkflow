@@ -174,12 +174,16 @@ class Call(Evaluable):
         return Call(self.reference, args=self.args, kwargs=new_kwargs)
 
     def eval(self, env=None):
+        ref, args, kwargs = self._eval_rak(env)
+        return ref(*args, **kwargs)
+
+    def _eval_rak(self, env):
         ref = self.reference.eval(env)
         args = [arg.eval(env) if isinstance(arg, Evaluable) else arg
                 for arg in self.args]
         kwargs = {k: v.eval(env) if isinstance(v, Evaluable) else v
                   for k, v in self.kwargs.items()}
-        return ref(*args, **kwargs)
+        return ref, args, kwargs
 
     def __eq__(self, other):
         if not isinstance(other, Call):
@@ -232,9 +236,34 @@ class Call(Evaluable):
             s.append(")")
         return "".join(s)
 
+    def partial(self):
+        return Call._Partial(self)
+
     @staticmethod
     def _v0(evaluable, args, kwargs):
         return Call(evaluable, args=args, kwargs=kwargs)
+
+    class _Partial(Evaluable):
+        def __init__(self, call):
+            self.call = call
+
+        def __reduce__(self):
+            return Call._Partial._v0, (self.call,)
+
+        def eval(self, env=None):
+            ref, args, kwargs = self.call._eval_rak(env)
+            from functools import partial
+            return partial(ref, *args, **kwargs)
+
+        def __repr__(self):
+            return "{!r}.partial()".format(self.call)
+
+        def __str__(self):
+            return "{}.partial()".format(self.call)
+
+        @staticmethod
+        def _v0(call):
+            return Call._Partial(call)
 
 
 class Exec(Evaluable, dict):
@@ -563,7 +592,8 @@ class Environment(dict):
                 s.append(head)
                 _nl_indent = nl_indent + " "*len(head)
                 _v = str(v) \
-                    if isinstance(v, (Call, Environment, Exec)) \
+                    if isinstance(v, (Call, Call._Partial, Environment,
+                                      Exec)) \
                     else repr(v)
                 s.append(_nl_indent.join(_v.split("\n")))
                 s.append(",")
