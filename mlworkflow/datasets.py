@@ -61,29 +61,44 @@ class Dataset(metaclass=ABCMeta):
 
     @abstractmethod
     def query_item(self, key):
+        """Returns a tuple for one item, typically (Xi, Yi), or (Xi,)
+        """
         pass
 
-    def query(self, keys):
-        """Computes two arrays (X, Y) from items corresponding to the provided keys
+    def query(self, keys, wrap=False):
+        """Computes a batch, typically (X, Y) from the items (Xi, Yi) yielded
+        by query_item(keys[i]).
 
-        At this point, we consider keys is a list. Its cost should be
-        negligible with respect to that of the data.
+        At this point, we consider keys is a list.
         """
-        Xs = [0]*len(keys)
-        Ys = [0]*len(keys)
-        for i, key in enumerate(keys):
-            Xs[i], Ys[i] = self.query_item(key)
-        return np.array(Xs), np.array(Ys)
+        iterator = enumerate(keys)
+        _, key0 = next(iterator)
+        first = self.query_item(key0)
+        if wrap:
+            first = (first,)
+        width = range(len(first))
 
-    def batches(self, keys, batch_size):
+        XYs = [[None]*len(keys) for j in width]
+        for j in width:
+            XYs[j][0] = first[j]
+
+        for i, key in iterator:
+            item = self.query_item(key)
+            if wrap:
+                item = (item,)
+            for j in width:
+                XYs[j][i] = item[j]
+        return tuple(np.array(Xs) for Xs in XYs)
+
+    def batches(self, keys, batch_size, **kwargs):
         """Compute batches to make one epoch of the given keys
 
         Remember to perform the shuffling of the keys before!
         """
         for key_chunk in chunkify(keys, batch_size):
-            yield self.query(key_chunk)
+            yield self.query(key_chunk, **kwargs)
 
-    def balanced_batches(self, split_keys, batch_size):
+    def balanced_batches(self, split_keys, batch_size, **kwargs):
         """Compute balanced batches to make one epoch with respect to the
         smallest list of keys.
 
@@ -99,7 +114,7 @@ class Dataset(metaclass=ABCMeta):
             min_length = min(len(p) for p in parallel)
             if min_length != batch_size:
                 parallel = [p[:min_length] for p in parallel]
-            Xs, Ys = self.query(sum(parallel, []))
+            Xs, Ys = self.query(sum(parallel, []), **kwargs)
             yield Xs, Ys
 
     def items_equality(self, a, b):
@@ -227,8 +242,8 @@ class CacheLastDataset(Dataset):
 
 
 class AugmentedDataset(Dataset, metaclass=ABCMeta):
-    """ "Augments" a dataset in the sense that it can produce many items from one
-    item of the dataset.
+    """ "Augments" a dataset in the sense that it can produce many items from
+    one item of the dataset.
 
     >>> class PermutingDataset(AugmentedDataset):
     ...     def augment(self, root_key, root_item):
