@@ -7,4 +7,4 @@ from mlworkflow.data_collection import DataCollection, find_files
 from mlworkflow.environment import Call, Exec, Ref, Environment
 from mlworkflow.interactive import LivePanels
 from mlworkflow.notebook import Notebook
-from mlworkflow.keras import get_keras_weights, set_keras_weights
+from mlworkflow.keras_utils import get_keras_weights, set_keras_weights

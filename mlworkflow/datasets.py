@@ -220,6 +220,10 @@ class TransformedDataset(Dataset):
                 item = transform(item)
         return item
 
+    def add_transform(self, transform):
+        item = (transform, getattr(transform, "needs_key", False))
+        self.transforms.append(item)
+
 
 class CacheLastDataset(Dataset):
     def __init__(self, dataset):

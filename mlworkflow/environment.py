@@ -211,7 +211,7 @@ class Call(Evaluable):
 
     def __str__(self):
         s = ["Call({})".format(self._format_ref())]
-        indentation = " "*2
+        indentation = " "*3
         nl_indent = "\n{}".format(indentation)
         if self.kwargs:
             s.append("(")
@@ -221,7 +221,7 @@ class Call(Evaluable):
                 head = k+"="
                 s.append(head)
                 _nl_indent = nl_indent + " "*len(head)
-                s.append(_nl_indent.join(_v.split("\n")))
+                s.append(nl_indent.join(_v.split("\n")))
                 s.append(",\n" + indentation)
             s[-1] = s[-1][1:-1]  # remove comma and space
             s.append(")")
@@ -301,7 +301,9 @@ class Exec(Evaluable, dict):
     3
     """
     def __init__(self, code):
-        from textwrap import _leading_whitespace_re
+        # from textwrap import _leading_whitespace_re
+        _leading_whitespace_re = re.compile('(^[ \t]*)(?:[^ \t\n])',
+                                            re.MULTILINE)
         code = code.split("\n")
         _ind = min(len(x.group(1))
                    for line in code
@@ -323,7 +325,9 @@ class Exec(Evaluable, dict):
         locs = Exec._Locals(env, leak_in)
         # Execute, handle return and leak_out updating
         try:
-            exec(self.code, locs)
+            code = compile(self.code, "<Exec@{:X}>".format(id(self)),
+                           mode="exec")
+            exec(code, locs)
         except Exec._ReturnException as ret_exc:
             _result = ret_exc.args[0]
         finally:
@@ -379,13 +383,15 @@ class Exec(Evaluable, dict):
 
     def __str__(self):
         body = repr(self.code)
+        indent = " "*3
+        nl_indent = "\n" + indent
         if "\\n" in body:
             quote = body[0]
-            body = body[1:-1].replace("\\n", '\n')
-            body = ("{quote}{quote}{quote}\n"
+            body = body[1:-1].replace("\\n", nl_indent)
+            body = ("{quote}{quote}{quote}\n{indent}"
                     "{}\n"
                     "{quote}{quote}{quote}"
-                    .format(body, quote=quote))
+                    .format(body, quote=quote, indent=indent))
         return "Exec({})".format(body)
 
     def __repr__(self):
@@ -582,7 +588,7 @@ class Environment(dict):
             to_clean.extend(to_refresh)
 
     def __str__(self):
-        indentation = " "*2
+        indentation = " "*3
         nl_indent = "\n"+indentation
         s = ["Environment("]
         if self:
@@ -595,7 +601,7 @@ class Environment(dict):
                     if isinstance(v, (Call, Call._Partial, Environment,
                                       Exec)) \
                     else repr(v)
-                s.append(_nl_indent.join(_v.split("\n")))
+                s.append(nl_indent.join(_v.split("\n")))
                 s.append(",")
             s[-1] = ""
             s.append("\n")
