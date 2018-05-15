@@ -480,11 +480,10 @@ def pickle_or_load(dataset, path, check_first_n_items=1, overwrite=False,
                 os.remove(path)
             raise exc
     opened_dataset = PickledDataset(_open_once(path, "rb"))
-    chunk = next(chunkify(((k, dataset.query_item(k))
-                           for k in dataset.list_keys()),
-                          check_first_n_items))
+    chunk = next(chunkify(dataset.list_keys(), check_first_n_items))
     reason = None
-    for k, true_item in chunk:
+    for k in chunk:
+        true_item = dataset.query_item(k)
         try:
             try:
                 loaded_item = opened_dataset.query_item(k)
@@ -496,9 +495,10 @@ def pickle_or_load(dataset, path, check_first_n_items=1, overwrite=False,
             reason = r
             equality = False
         except Exception as e:
-            sys.stderr.write("Warning: Could not check whether the Pickled "
-                             "dataset was up to date, please implement "
-                             "dataset.items_equality or item.__eq__.\n")
+            sys.stderr.write("Warning: Could not check whether the dataset "
+                             "pickled at {} was up to date, please implement "
+                             "dataset.items_equality or item.__eq__.\n"
+                             .format(path))
             raise e
         if not equality:
             if reason is not None:

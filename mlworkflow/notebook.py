@@ -9,9 +9,59 @@ import sys
 
 
 @functools.wraps(exec)
-def _exec(source, level=0):
+def _exec(source, level=0, custom_globals=None):
     frame = sys._getframe(level+1)
+    if custom_globals is not None:
+        frame.f_globals.update(custom_globals)
     return exec(source, frame.f_locals, frame.f_globals)
+
+
+def run_in_cell(f=""):
+    def decorator(f):
+        import inspect
+        import ast
+        class ReturnException(Exception):
+            pass
+        class ReturnTransformer(ast.NodeTransformer):
+            def visit_Return(self, node):
+                return ast.copy_location(
+                    ast.Raise(exc=ast.Call(func=ast.Name("_ReturnException",
+                                                            ast.Load()),
+                                            args=[node.value],
+                                            keywords=[])),
+                    node
+                    )
+
+        source = inspect.getsource(f)
+        filename = "<string>"
+        tree = ast.parse(source, filename, mode="single")
+        assert isinstance(tree.body[0], ast.FunctionDef), \
+            ("The run_as_cell decorator must be used with a function "
+             "definition.")
+        
+        body_tree = tree.body[0].body
+        body_tree = ast.Module(body_tree)
+        body_tree = ReturnTransformer().visit(body_tree)
+        body_tree = ast.fix_missing_locations(body_tree)
+        body_code = compile(body_tree, filename, mode="exec")
+
+        custom_globals = {k: v.default
+                            for k, v in inspect.signature(f).parameters.items()
+                            if v.default is not inspect._empty
+                            }
+        custom_globals["_ReturnException"] = ReturnException
+        res = None
+
+        try:
+            _exec(body_code, level=1, custom_globals=custom_globals)
+        except ReturnException as e:
+            res = e.args[0]
+        f.result = res
+        return f
+    if isinstance(f, str):
+        return decorator
+    else:
+        return decorator(f)
 
 
 class Notebook(nbformat.notebooknode.NotebookNode):
@@ -27,7 +77,7 @@ class Notebook(nbformat.notebooknode.NotebookNode):
         value = pickle.dumps(value)
         value = base64.b64encode(value)
         value = value.decode("utf-8")
-        ip.display_pub.publish({}, {"type": "interactive_storage",
+        ip.display_pub.publish({}, {"type": "mlworkflow_storage",
                                     "name": name, "value": value,
                                     "timestamp": time.time()})
 
@@ -39,7 +89,7 @@ class Notebook(nbformat.notebooknode.NotebookNode):
                 if output["output_type"] != "display_data":
                     continue
                 md = output.metadata
-                if (md.get("type", None) == "interactive_storage" and
+                if (md.get("type", None) == "mlworkflow_storage" and
                         md["name"] == name and
                         md["timestamp"] > maxts):
                     latest = md["value"]

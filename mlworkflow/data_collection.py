@@ -116,8 +116,8 @@ class DataCollection(dict):
     """
 
     @staticmethod
-    def with_parent(filename="{}.dcp", parent=None, *, slice=None,
-                    fields=None):
+    def load_with_parent(filename="{}.dcp", parent=None, *, slice=None,
+                         fields=None):
         assert parent is not None
         old = DataCollection.load_file(parent, slice=slice, fields=fields)
         data = DataCollection(filename)
