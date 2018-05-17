@@ -217,7 +217,9 @@ class Call(Evaluable):
             s.append("(")
             s.append(nl_indent)
             for k, v in self.kwargs.items():
-                _v = str(v) if isinstance(v, Call) else repr(v)
+                _v = str(v) \
+                    if isinstance(v, (Call, Call._Partial)) \
+                    else repr(v)
                 head = k+"="
                 s.append(head)
                 _nl_indent = nl_indent + " "*len(head)

@@ -1,22 +1,16 @@
 from IPython import get_ipython
 import nbformat
 
-import functools
 import pickle
 import base64
 import time
-import sys
 
-
-@functools.wraps(exec)
-def _exec(source, level=0, custom_globals=None):
-    frame = sys._getframe(level+1)
-    if custom_globals is not None:
-        frame.f_globals.update(custom_globals)
-    return exec(source, frame.f_locals, frame.f_globals)
+from mlworkflow.utils import _exec
 
 
 def run_in_cell(f=""):
+    """Executes the body of a function as it is being defined
+    """
     def decorator(f):
         import inspect
         import ast
@@ -59,8 +53,10 @@ def run_in_cell(f=""):
         f.result = res
         return f
     if isinstance(f, str):
+        flags = f.split()
         return decorator
     else:
+        flags = []
         return decorator(f)
 
 
