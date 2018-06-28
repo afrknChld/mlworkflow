@@ -1,3 +1,4 @@
+from collections import ChainMap
 import functools
 import sys
 
@@ -24,17 +25,21 @@ def kwonly_from_ctx(f):
         kwonlyargs = []
     fillable = set(kwonlyargs)
     if kwonlydefaults is not None:
+        # From kwonlydefaults, remove those having "ctx_or"
         not_to_fill = (k for k, v in kwonlydefaults.items()
                        if not isinstance(v, ctx_or))
         fillable.difference_update(not_to_fill)
     else:
         kwonlydefaults = {}
-    fillable.discard("ctx")  # handled separately
+    fillable.discard("ctx")  # the ctx argument is handled separately
+    # fillable now contains all keywordonly parameters, without the ctx_or(...)
 
     @functools.wraps(f)
     def wrapper(*args, ctx=_no_value, **kwargs):
         if ctx is _no_value:
             return f(*args, **kwargs)
+        elif isinstance(ctx, (list, tuple)):
+            ctx = ChainMap(*ctx[::-1])  # Last added dict has highest priority
         if "ctx" in kwonlyargs:
             kwargs["ctx"] = ctx
         for name in fillable:
@@ -50,17 +55,28 @@ def kwonly_from_ctx(f):
             if from_default is not _no_value:
                 kwargs[name] = from_default.default_value
         return f(*args, **kwargs)
-    return wrapper
+    return _attach_ops(wrapper)
 
 
-def bind_ctx(f, ctx):
-    return functools.partial(f, ctx=ctx)
+def _wrap(ctx):
+    if isinstance(ctx, (tuple, list)):
+        return ctx
+    return (ctx,)
 
 
-def chain_ctx(*args):
-    from collections import ChainMap
-    ctx = ChainMap(*args)
-    return ctx
+def _attach_ops(f):
+    def bind_ctx(*contexts, lock=False):
+        @functools.wraps(f)
+        def wrapper(*args, ctx=_no_value, **kwargs):
+            if ctx is _no_value:
+                ctx = contexts
+            else:
+                assert not lock
+                ctx = contexts + _wrap(ctx)
+            return f(*args, ctx=ctx, **kwargs)
+        return _attach_ops(wrapper)
+    f.bind_ctx = bind_ctx
+    return f
 
 
 @functools.wraps(exec)
