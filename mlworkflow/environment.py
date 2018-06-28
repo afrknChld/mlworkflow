@@ -143,7 +143,7 @@ class Call(Evaluable):
                 self.reference = callable
             else:
                 self.reference = GlobalRef(callable.__module__,
-                                           callable.__name__)
+                                           callable.__qualname__)
         else:
             self.reference = GlobalRef(callable, modattr)
         self.args = args
@@ -255,7 +255,8 @@ class Call(Evaluable):
         def eval(self, env=None):
             ref, args, kwargs = self.call._eval_rak(env)
             from functools import partial
-            return partial(ref, *args, **kwargs)
+            return lambda *_args, **_kwargs: ref(*args, *_args,
+                                                 **kwargs, **_kwargs)
 
         def __repr__(self):
             return "{!r}.partial()".format(self.call)

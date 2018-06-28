@@ -8,7 +8,7 @@ import time
 from mlworkflow.utils import _exec
 
 
-def run_in_cell(f=""):
+def run_in_cell(f=None, level=0):
     """Executes the body of a function as it is being defined
     """
     def decorator(f):
@@ -19,7 +19,7 @@ def run_in_cell(f=""):
         class ReturnTransformer(ast.NodeTransformer):
             def visit_Return(self, node):
                 return ast.copy_location(
-                    ast.Raise(exc=ast.Call(func=ast.Name("_ReturnException",
+                    ast.Raise(exc=ast.Call(func=ast.Name("__ReturnException",
                                                             ast.Load()),
                                             args=[node.value],
                                             keywords=[])),
@@ -40,23 +40,22 @@ def run_in_cell(f=""):
         body_code = compile(body_tree, filename, mode="exec")
 
         custom_globals = {k: v.default
-                            for k, v in inspect.signature(f).parameters.items()
-                            if v.default is not inspect._empty
-                            }
-        custom_globals["_ReturnException"] = ReturnException
+                          for k, v in inspect.signature(f).parameters.items()
+                          if v.default is not inspect._empty
+                          }
+        custom_globals["__ReturnException"] = ReturnException
         res = None
 
         try:
-            _exec(body_code, level=1, custom_globals=custom_globals)
+            _exec(body_code, level=level+1, custom_globals=custom_globals)
         except ReturnException as e:
             res = e.args[0]
         f.result = res
         return f
-    if isinstance(f, str):
-        flags = f.split()
+    if f is None:
         return decorator
     else:
-        flags = []
+        level += 1
         return decorator(f)
 
 
