@@ -85,3 +85,65 @@ def _exec(source, level=0, custom_globals=None):
     if custom_globals is not None:
         frame.f_globals.update(custom_globals)
     return exec(source, frame.f_locals, frame.f_globals)
+
+
+class DictObject(dict):
+    __slots__ = ()
+
+    def __getattr__(self, key):
+        return super().__getitem__(key)
+
+    def __setattr__(self, key, value):
+        return super().__setitem__(key, value)
+
+    @classmethod
+    def from_dict(cls, dic):
+        return cls(**dic)
+
+    def __copy__(self):
+        copy = self.__class__.__new__(self.__class__)
+        for k, v in items:
+            copy[k] = v
+        return copy
+    copy = __copy__
+    
+    def __deepcopy__(self, memo=None):
+        from copy import deepcopy
+        copy = self.__class__.__new__(self.__class__)
+        for k, v in items:
+            copy[k] = deepcopy(v, memo)
+        return copy
+    deepcopy = __deepcopy__
+
+    def __reduce__(self):
+        return DictObject._v0, (self.__class__.__module__,
+                                self.__class__.__qualname__,
+                                dict(self))
+
+    @staticmethod
+    def _v0(module, qualname, items):
+        try:
+            from importlib import import_module
+            target = import_module(module)
+            names = qualname.split(".")
+            for name in names:
+                target = getattr(target, name)
+        except (ImportError, AttributeError):
+            target = DictObject
+        target = target(**items)
+        return target
+
+
+class ListQueriableDict(dict):
+    def __getitem__(self, key):
+        sup = super()
+        if isinstance(key, list):
+            return [sup.__getitem__(k) for k in key]
+        return sup.__getitem__(key)
+
+    def __setitem__(self, key, value):
+        sup = super()
+        if isinstance(key, list):
+            for k, v in zip(key, value):
+                sup.__setitem__(k, v)
+        sup.__setitem__(key, value)
