@@ -202,7 +202,7 @@ class TransformedDataset(Dataset):
     >>> d.query([0, 1])
     (array(['D.', 'T.'], ...), array(['Washington', 'Hanks'], ...))
     """
-    def __init__(self, dataset, transforms: list):
+    def __init__(self, dataset, transforms=[]):
         """Creates a dataset performing operations for modifying another"""
         self.dataset = dataset
         self.transforms = [(t, getattr(t, "needs_key", False))
@@ -223,6 +223,7 @@ class TransformedDataset(Dataset):
     def add_transform(self, transform):
         item = (transform, getattr(transform, "needs_key", False))
         self.transforms.append(item)
+        return transform
 
 
 class CacheLastDataset(Dataset):

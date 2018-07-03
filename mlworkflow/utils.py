@@ -1,6 +1,24 @@
+from contextlib import contextmanager
 from collections import ChainMap
+import numpy as np
 import functools
 import sys
+
+
+@contextmanager
+def _seed(random, seed):
+    if hasattr(random, "get_state"):
+        old_state = random.get_state()
+        random.seed(seed)
+        yield random
+        random.set_state(old_state)
+    elif hasattr(random, "getstate"):
+        old_state = random.getstate()
+        random.seed(seed)
+        yield random
+        random.setstate(old_state)
+    else:
+        raise Exception("Random object not recognized")
 
 
 _no_value = object()
@@ -16,6 +34,9 @@ class ctx_or:
 def kwonly_from_ctx(f):
     """Wraps a function so that it can unpack arguments from a ctx dictionary.
     Those arguments may only be keywords and have no default value.
+
+    Only kwonly arguments without default value are replaced by the context, or
+    those with a ctx_or(v) value.
     """
     import inspect
     argspec = inspect.getfullargspec(f)
@@ -25,14 +46,13 @@ def kwonly_from_ctx(f):
         kwonlyargs = []
     fillable = set(kwonlyargs)
     if kwonlydefaults is not None:
-        # From kwonlydefaults, remove those having "ctx_or"
+        # Do not fill arguments with default value, except if it is a ctx_or
         not_to_fill = (k for k, v in kwonlydefaults.items()
                        if not isinstance(v, ctx_or))
         fillable.difference_update(not_to_fill)
     else:
         kwonlydefaults = {}
     fillable.discard("ctx")  # the ctx argument is handled separately
-    # fillable now contains all keywordonly parameters, without the ctx_or(...)
 
     @functools.wraps(f)
     def wrapper(*args, ctx=_no_value, **kwargs):
@@ -50,7 +70,7 @@ def kwonly_from_ctx(f):
             from_ctx = ctx.get(name, _no_value)
             if from_ctx is not _no_value:
                 kwargs[name] = from_ctx
-            # Otherwise, provide its default value.
+            # Otherwise, provide its default value. It is fillable, a ctx_or
             from_default = kwonlydefaults.get(name, _no_value)
             if from_default is not _no_value:
                 kwargs[name] = from_default.default_value
