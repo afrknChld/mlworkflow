@@ -124,7 +124,8 @@ class Dataset(metaclass=ABCMeta):
     @parent_dataset.setter
     def parent_dataset(self, parent_dataset):
         self._parent_dataset = parent_dataset
-        self._context = parent_dataset.context.new_child(self.context.maps[0])
+        if self._parent_dataset is not None:
+            self._context = parent_dataset.context.new_child(self.context.maps[0])
 
     dataset = parent_dataset  # TODO: Remove this alias
 
