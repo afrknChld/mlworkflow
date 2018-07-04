@@ -9,9 +9,9 @@ import weakref
 
 # For ParallelizedDataset
 from multiprocessing import Process, Queue, Pipe
+from collections import deque, ChainMap
 from multiprocessing.pool import Pool
 from contextlib import contextmanager
-from collections import deque
 import math
 
 
@@ -117,6 +117,25 @@ class Dataset(metaclass=ABCMeta):
             Xs, Ys = self.query(sum(parallel, []), **kwargs)
             yield Xs, Ys
 
+    @property
+    def parent_dataset(self):
+        return self._parent_dataset
+
+    @parent_dataset.setter
+    def parent_dataset(self, parent_dataset):
+        self._parent_dataset = parent_dataset
+        self._context = parent_dataset.context.new_child(self.context.maps[0])
+
+    dataset = parent_dataset  # TODO: Remove this alias
+
+    @property
+    def context(self):
+        try:
+            return self._context
+        except AttributeError:
+            self._context = ChainMap()
+            return self._context
+
     def items_equality(self, a, b):
         return self._recursive_equality(a, b)
 
@@ -220,10 +239,18 @@ class TransformedDataset(Dataset):
                 item = transform(item)
         return item
 
-    def add_transform(self, transform):
-        item = (transform, getattr(transform, "needs_key", False))
-        self.transforms.append(item)
-        return transform
+    def add_transform(self, transform=None, *, needs_key=False):
+        _needs_key = needs_key
+        def add_transform(transform):
+            needs_key = _needs_key
+            if not needs_key:
+                needs_key = getattr(transform, "needs_key", False)
+            item = (transform, needs_key)
+            self.transforms.append(item)
+            return transform
+        if transform is not None:
+            return add_transform(transform)
+        return add_transform
 
 
 class CacheLastDataset(Dataset):
