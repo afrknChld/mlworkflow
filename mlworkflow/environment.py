@@ -347,9 +347,10 @@ class Exec(Evaluable, dict):
             for n in locs:
                 ref = Ref("{}@{}".format(env.current, n))
                 current_item = env.get(n, _no_value)
-                assert current_item is _no_value or ref == current_item, \
-                    ("Variable {!r} was already defined as {!r}." 
-                     .format(n, current_item))
+                # We most likely simply want to override it.
+                # assert current_item is _no_value or ref == current_item, \
+                #     ("Variable {!r} was already defined as {!r}." 
+                #      .format(n, current_item))
                 env[n] = ref  # Set and erase the potential cache
         return locs
 
@@ -375,7 +376,7 @@ class Exec(Evaluable, dict):
             value = super().get(key, _no_value)
             if value is not _no_value:
                 return value
-            if key in self.env:
+            if self.env.can_run(key):
                 try:
                     return self.env.run(key)
                 except Exception as e:
@@ -440,6 +441,9 @@ class Environment(dict):
         self.running_stack = []
         self.clean()
 
+    def can_run(self, name):
+        return name in self or name in self.cache
+
     def __reduce__(self):
         return Environment._v0, (dict(self),)
 
@@ -500,7 +504,7 @@ class Environment(dict):
 
     def run(self, name, **kwargs):
         if isinstance(name, list):
-            return [self.run(n) for n in name]
+            return [self.run(n, **kwargs) for n in name]
         for running in self.running_stack:
             # For computing running, we need "name"
             self.requires[running].add(name)
@@ -516,6 +520,24 @@ class Environment(dict):
                 finally:
                     self.running_stack.pop()
             self.cache[name] = value
+        return value
+
+    def force_run(self, name, **kwargs):
+        if isinstance(name, list):
+            return [self.force_run(n, **kwargs) for n in name]
+        for running in self.running_stack:
+            # For computing running, we need "name"
+            self.requires[running].add(name)
+            self.required_by[name].add(running)
+        # Evaluate whatever happens
+        value = self[name]
+        if isinstance(value, Evaluable):
+            self.running_stack.append(name)
+            try:
+                value = value.eval(self, **kwargs)
+            finally:
+                self.running_stack.pop()
+        self.cache[name] = value
         return value
 
     @property
@@ -628,7 +650,7 @@ else:
         def with_env(line, cell):
             env, name, *flags = line.split(" ")
             env = _ip.user_global_ns[env]
-            if "leak_in" in flags or "leak" in flags:
+            if "leak_in" in flags:
                 assert name == "/", \
                     ("Leaking-in is only valid with '/' as name. Indeed, you "
                      "will not want your environment to contain all of the "
@@ -640,16 +662,14 @@ else:
                            if k not in env}
             else:
                 leak_in = None
-            leak_out = _ip.user_global_ns \
-                if "leak_out" in flags or "leak" in flags \
-                else None
+            leak_out = _ip.user_global_ns
             if name == "/":
                 res = Exec(cell).eval(env, leak_in=leak_in, leak_out=leak_out)
             else:
                 env[name] = Exec(cell)
                 res = env.run(name, leak_in=leak_in, leak_out=leak_out,
                               gen_refs=True)
-            if "silent" not in flags:
+            if "show" in flags:
                 return res
 
 
