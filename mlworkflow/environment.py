@@ -385,6 +385,11 @@ class Exec(Evaluable, dict):
             else:
                 raise KeyError(key)
 
+        def __setitem__(self, key, value):
+            if key in self.env.frozen:
+                return
+            super().__setitem__(key, value)
+
     def __str__(self):
         body = repr(self.code)
         indent = " "*3
@@ -480,7 +485,17 @@ class Environment(dict):
     def current(self):
         return self.running_stack[-1]
 
-    def feed(self, feed_dict, feed_cache=True):
+    def copy(self, with_cache=True, with_freeze=True):
+        copy = Environment(self)
+        if with_cache:
+            copy.cache.update(self.cache)
+            copy.required_by.update(self.required_by)
+            copy.requires.update(self.requires)
+            if with_freeze:
+                copy.frozen.update(self.frozen)
+        return copy
+
+    def feed(self, feed_dict, feed_cache=True, freeze_in_code=False):
         """Returns a copied environment with updated fields
 
         >>> env = Environment(a=Call(print).with_args("Compute a"),
@@ -492,15 +507,13 @@ class Environment(dict):
         >>> env.run("b")
         Compute b None
         """
-        copy = Environment(self)
-        copy.cache.update(self.cache)
-        copy.required_by.update(self.required_by)
-        copy.requires.update(self.requires)
         if feed_cache:
-            copy.cache.update(feed_dict)
+            self.cache.update(feed_dict)
+            if freeze_in_code:
+                self.frozen.update(feed_dict)
         else:
-            copy.update(feed_dict)
-        return copy
+            self.update(feed_dict)
+        return self
 
     def run(self, name, **kwargs):
         if isinstance(name, list):
@@ -566,10 +579,12 @@ class Environment(dict):
         KeyError: 'b'
         """
         self.cache.pop(key, None)
+        self.frozen.discard(key)
         return super().__delitem__(key)
     
     def pop(self, key, *args):
         self.cache.pop(key, None)
+        self.frozen.discard(key)
         return super().pop(key, *args)
 
     def clean(self):
@@ -579,6 +594,7 @@ class Environment(dict):
             self.cache = {}
         self.required_by = defaultdict(set)
         self.requires = defaultdict(set)
+        self.frozen = set()
 
     def _clean(self, *names):
         """Cleans the dependency graph
@@ -604,6 +620,7 @@ class Environment(dict):
         while to_clean:
             name = to_clean.pop()
             self.cache.pop(name, None)
+            self.frozen.discard(name)
             # requirements will be recomputed on next evaluation
             requirements = self.requires.pop(name, ())
             for req in requirements:  # This does not require anything anymore
