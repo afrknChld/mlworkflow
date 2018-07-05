@@ -384,9 +384,14 @@ class PickledDataset(Dataset):
             obj = dataset.query_item(key)
             pickler.dump(obj)
             pickler.memo.clear()
-        # put index offset at the beginning of the file
+        # put index and record offset
         index_location = file_handler.tell()
         pickler.dump(index)
+        # put context
+        context = getattr(dataset, "_context", None)
+        if context:
+            pickler.dump({**context})
+        # put index offset at the beginning of the file
         file_handler.seek(0)
         index_location ^= 1 << 65
         pickler.dump(index_location)
@@ -398,12 +403,17 @@ class PickledDataset(Dataset):
         self.offset_keys = offset_keys
         self.unpickler = unpickler = Unpickler(file_handler)
 
-        # load the offset
+        # load the index offset then the index
         file_handler.seek(0)
         index_location = unpickler.load()
         index_location ^= 1 << 65
         file_handler.seek(index_location)
         self.index = unpickler.load()
+        # try to load the context if any
+        try:
+            self._context = ChainMap(unpickler.load())
+        except EOFError:
+            pass
 
         if offset_keys:
             def list_keys():
@@ -494,6 +504,10 @@ def _open_once(path, *args, **kwargs):
 
 def pickle_or_load(dataset, path, check_first_n_items=1, overwrite=False,
                    show_overwrite_button=True):
+    from io import IOBase
+    if isinstance(path, IOBase):
+        PickledDataset.create(dataset, path)
+        return PickledDataset(path)
     was_existing = os.path.exists(path)
     if overwrite and was_existing:
         _close(path)
