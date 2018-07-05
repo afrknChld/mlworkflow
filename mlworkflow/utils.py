@@ -31,6 +31,29 @@ class ctx_or:
         return "ctx_or({!r})".format(self.default_value)
 
 
+def bind(f, **bkwargs):
+    """Creates a new function with added kwargs"""
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        kwargs = {**bkwargs, **kwargs}
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def bindable(f):
+    """Add a bind(**kwargs) attribute to create a new function with
+    added default kwargs.
+    """
+    def bind(**bkwargs):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            kwargs = {**bkwargs, **kwargs}
+            return f(*args, **kwargs)
+        return wrapper
+    f.bind = bind
+    return f
+
+
 def kwonly_from_ctx(f):
     """Wraps a function so that it can unpack arguments from a ctx dictionary.
     Those arguments may only be keywords and have no default value.
@@ -144,13 +167,13 @@ class DictObject(dict):
     def _v0(module, qualname, items):
         try:
             from importlib import import_module
-            target = import_module(module)
+            klass = import_module(module)
             names = qualname.split(".")
             for name in names:
-                target = getattr(target, name)
+                klass = getattr(klass, name)
         except (ImportError, AttributeError):
-            target = DictObject
-        target = target(**items)
+            klass = DictObject
+        target = klass(**items)
         return target
 
 
