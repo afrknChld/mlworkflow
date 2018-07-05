@@ -173,7 +173,10 @@ class DictObject(dict):
                 klass = getattr(klass, name)
         except (ImportError, AttributeError):
             klass = DictObject
-        target = klass(**items)
+        # We bypass __init__ because new fields mostly for the reason that new
+        # fields may have been added while __init__ may not expect them.
+        target = klass.__new__(klass)
+        target.update(items)
         return target
 
 
