@@ -342,16 +342,19 @@ class Exec(Evaluable, dict):
         to_export = self._to_export(env=env, leak_in=leak_in, locals=locs)
         locs = {k:v for k, v in locs.items() if k in to_export}
         if gen_refs:
+            # We prefer not be in an exec running an Exec
             assert env[env.current] == self, ("Cannot run a non root Exec "
                                               "with gen_refs option")
             for n in locs:
                 ref = Ref("{}@{}".format(env.current, n))
-                current_item = env.get(n, _no_value)
                 # We most likely simply want to override it.
+                # current_item = env.get(n, _no_value)
                 # assert current_item is _no_value or ref == current_item, \
                 #     ("Variable {!r} was already defined as {!r}." 
                 #      .format(n, current_item))
                 env[n] = ref  # Set and erase the potential cache
+        for n, v in locs.items():
+            env.cache[n] = v
         return locs
 
     def _to_export(self, *, env, leak_in, locals):
@@ -690,7 +693,7 @@ else:
             else:
                 env[name] = Exec(cell)
                 res = env.run(name, leak_in=leak_in, leak_out=leak_out,
-                              gen_refs=True)
+                              gen_refs="no_ref" not in flags)
             if "show" in flags:
                 return res
 
