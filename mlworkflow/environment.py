@@ -479,13 +479,14 @@ class Environment(dict):
         to_remove = {}  # empty dict on which we simulate the update
         to_remove.update(*args, **kwargs)
         self._clean(*to_remove)
-        return super().update(*args, **kwargs)
+        super().update(*args, **kwargs)
+        return self
 
     @property
     def current(self):
         return self.running_stack[-1]
 
-    def copy(self, with_cache=True, with_freeze=True):
+    def copy(self, with_cache=True, with_frozen_values=True):
         copy = Environment(self)
         if with_cache:
             copy.cache.update(self.cache)
@@ -495,22 +496,26 @@ class Environment(dict):
                 copy.frozen.update(self.frozen)
         return copy
 
-    def feed(self, feed_dict, feed_cache=True, freeze_in_code=False):
-        """Returns a copied environment with updated fields
+    def freeze(self, *names, **kwargs):
+        """Freeze an item's value (when assigned into Exec code at the moment)
+        """
+        self.cache.update(kwargs)
+        self.frozen.update(names, kwargs)
+        return self
 
+    def feed(self, feed_dict, feed_cache=True):
+        """
         >>> env = Environment(a=Call(print).with_args("Compute a"),
         ...                   b=Call(print).with_args("Compute b", "@a"))
         >>> env.run("a")
         Compute a
-        >>> env.feed({"a":", great!"}).run("b")
+        >>> env.copy().feed({"a":", great!"}).run("b")
         Compute b , great!
         >>> env.run("b")
         Compute b None
         """
         if feed_cache:
             self.cache.update(feed_dict)
-            if freeze_in_code:
-                self.frozen.update(feed_dict)
         else:
             self.update(feed_dict)
         return self
