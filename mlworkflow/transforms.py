@@ -1,7 +1,7 @@
 class GenericTransform:
     def __init__(self, signature):
         sigs = signature.split()
-        self.transforms = [getattr(self, sig, self.none)
+        self.transforms = [getattr(self, sig)
                            for sig in sigs]
 
     def none(self, item):

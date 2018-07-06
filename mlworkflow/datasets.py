@@ -253,6 +253,10 @@ class TransformedDataset(Dataset):
             return add_transform(transform)
         return add_transform
 
+    def add_transforms(self, transforms):
+        self.transforms.extend((t, getattr(t, "needs_key", False))
+                               for t in transforms)
+
 
 class CacheLastDataset(Dataset):
     def __init__(self, dataset):

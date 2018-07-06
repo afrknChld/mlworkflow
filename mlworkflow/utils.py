@@ -131,13 +131,11 @@ def _exec(source, level=0, custom_globals=None):
 
 
 class DictObject(dict):
-    __slots__ = ()
 
-    def __getattr__(self, key):
-        return super().__getitem__(key)
-
-    def __setattr__(self, key, value):
-        return super().__setitem__(key, value)
+    def __new__(cls, *args, **kwargs):
+        dict_object = super().__new__(cls, *args, **kwargs)
+        dict_object.__dict__ = dict_object
+        return dict_object
 
     @classmethod
     def from_dict(cls, dic):
@@ -145,7 +143,7 @@ class DictObject(dict):
 
     def __copy__(self):
         copy = self.__class__.__new__(self.__class__)
-        for k, v in items:
+        for k, v in self.items():
             copy[k] = v
         return copy
     copy = __copy__
@@ -153,7 +151,7 @@ class DictObject(dict):
     def __deepcopy__(self, memo=None):
         from copy import deepcopy
         copy = self.__class__.__new__(self.__class__)
-        for k, v in items:
+        for k, v in self.items():
             copy[k] = deepcopy(v, memo)
         return copy
     deepcopy = __deepcopy__
