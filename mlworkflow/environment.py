@@ -353,8 +353,15 @@ class Exec(Evaluable, dict):
                 #     ("Variable {!r} was already defined as {!r}." 
                 #      .format(n, current_item))
                 env[n] = ref  # Set and erase the potential cache
-        for n, v in locs.items():
-            env.cache[n] = v
+        if env is not None:
+            current = env.current
+            for n, v in locs.items():
+                env.requires[n].add(current)
+                env.required_by[n].add(current)
+                env.cache[n] = v
+            
+            env.requires[current].update(locs)
+            env.required_by[current].update(locs)
         return locs
 
     def _to_export(self, *, env, leak_in, locals):
@@ -495,13 +502,14 @@ class Environment(dict):
             copy.cache.update(self.cache)
             copy.required_by.update(self.required_by)
             copy.requires.update(self.requires)
-            if with_freeze:
+            if with_frozen_values:
                 copy.frozen.update(self.frozen)
         return copy
 
     def freeze(self, *names, **kwargs):
         """Freeze an item's value (when assigned into Exec code at the moment)
         """
+        self._clean(*names, *kwargs)
         self.cache.update(kwargs)
         self.frozen.update(names, kwargs)
         return self
@@ -518,6 +526,7 @@ class Environment(dict):
         Compute b None
         """
         if feed_cache:
+            self._clean(*feed_dict)
             self.cache.update(feed_dict)
         else:
             self.update(feed_dict)
@@ -626,14 +635,18 @@ class Environment(dict):
         """
         to_clean = list(names)
         while to_clean:
+            # what basically has to happen is that we want to remove the cache
+            # and the requirements (requires.pop) and remove the entries that 
+            # requires this one
             name = to_clean.pop()
             self.cache.pop(name, None)
             self.frozen.discard(name)
-            # requirements will be recomputed on next evaluation
+            # requirements of "name" will be recomputed on next evaluation
             requirements = self.requires.pop(name, ())
-            for req in requirements:  # This does not require anything anymore
+            # the requirements should not clean "name" anymore
+            for req in requirements:
                 self.required_by[req].discard(name)
-            # also clean the ones for which CURRENT is required
+            # clean the ones that require "name"
             to_refresh = self.required_by.pop(name, ())
             to_clean.extend(to_refresh)
 
