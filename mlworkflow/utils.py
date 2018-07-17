@@ -137,6 +137,9 @@ class DictObject(dict):
         dict_object.__dict__ = dict_object
         return dict_object
 
+    def __repr__(self):
+        return "{}({!r})".format(self.__qualname__, super().__repr__())
+
     @classmethod
     def from_dict(cls, dic):
         return cls(**dic)

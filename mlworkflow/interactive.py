@@ -164,14 +164,19 @@ class LivePanels:
 
     panels["mine"] = "Overwritable line"
     """
-    def __init__(self, panel_names=["head", "body"], record=[]):
-        self.panels = {}
-        if "_slider" not in panel_names:
-            panel_names = ["_slider"] + panel_names
-        for panel_name in panel_names:
-            output = Output()
-            self.panels[panel_name] = output
-            display.display(output)
+    def __init__(self, panel_names=["head", "body"], *, record=[], panels=None,
+                 slider=None):
+        if slider is None:
+            slider = Output()
+            display.display(slider)
+        if panels is None:
+            panels = {}
+            for panel_name in panel_names:
+                output = Output()
+                panels[panel_name] = output
+                display.display(output)
+        self._slider = slider
+        self.panels = panels
 
         self._recorders = {n: record_output(self.panels[n])
                            for n in record} if record else None
@@ -237,6 +242,17 @@ class LivePanels:
     def _on_loop_end(self):
         if self.recording is not None:
             self.show_recording(self.recording)
+
+    def iterate(self, iterator, caption, *, _level=0):
+        env = sys._getframe(_level+1).f_locals
+        try:
+            for item in iterator:
+                with self._body:
+                    yield item
+                self["head"] = caption.format(**env)
+                self._on_iteration_end()
+        finally:
+            self._on_loop_end()
 
     if tqdm_module is not None:
         @functools.wraps(tqdm_module.tqdm)
