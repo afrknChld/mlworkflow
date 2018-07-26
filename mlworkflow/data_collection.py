@@ -47,6 +47,9 @@ def find_files(pattern="*.dcp", show_hidden=False):
 
 
 def _create_file(filename):
+    directory = os.path.dirname(filename)
+    if directory:
+        os.makedirs(self.dir, exist_ok=True)
     file = open(filename, "wb")
     return file
 
@@ -167,7 +170,12 @@ class DataCollection(dict):
         assert parent is not None
         old = DataCollection.load_file(parent, slice=slice, fields=fields)
         data = DataCollection(filename)
-        data["_parent"] = parent
+        if data.filename is not None:
+            relpath = os.path.relpath(os.path.dirname(parent),
+                                      os.path.dirname(data.filename))
+            data["_parent"] = os.path.join(relpath, os.path.basename(parent))
+        else:
+            data["_parent"] = parent
         return data, old
 
     @staticmethod
@@ -239,8 +247,6 @@ class DataCollection(dict):
         if self.filename is not None:
             self.dir = os.path.dirname(self.filename)
             self.base = os.path.basename(self.filename)
-            if self.dir:
-                os.makedirs(self.dir, exist_ok=True)
         self.file = None
         self.pickler = None
 
