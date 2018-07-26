@@ -69,35 +69,32 @@ class TFModel:
         key.load(value, session=self.session)
 
     def train(self, inputs, targets):
-        with self.graph.as_default(), self.session.as_default():
-            if self._train is None:
-                self._train = self.session.make_callable([self.exports.loss, self.exports.step],
-                    [self.exports.training, self.exports.inputs, self.exports.targets])
-            return self._train(True, inputs, targets)[0]
+        if self._train is None:
+            self._train = self.session.make_callable([self.exports.loss, self.exports.step],
+                [self.exports.training, self.exports.inputs, self.exports.targets])
+        return self._train(True, inputs, targets)[0]
 
     def predict(self, inputs):
-        with self.graph.as_default(), self.session.as_default():
-            if self._predict is None:
-                self._predict = self.session.make_callable([self.exports.outputs],
-                    [self.exports.training, self.exports.inputs])
-            return self._predict(False, inputs)[0]
+        if self._predict is None:
+            self._predict = self.session.make_callable([self.exports.outputs],
+                [self.exports.training, self.exports.inputs])
+        return self._predict(False, inputs)[0]
 
     def evaluate(self, inputs, targets, losses=None):
-        with self.graph.as_default(), self.session.as_default():
-            if self._evaluation_losses != losses or self._evaluate is None:
-                self._evaluation_losses = losses
-                if losses is None:
-                    losses = self.exports.loss
-                elif isinstance(loss, str):
-                    losses = self.exports[losses]
-                elif isinstance(loss, (tuple, list)):
-                    losses = [self.exports[loss] if isinstance(loss, str) else loss
-                              for loss in losses]
-                else:
-                    losses = losses
-                self._evaluate = self.session.make_callable(losses,
-                    [self.exports.training, self.exports.inputs, self.exports.targets])
-            return self._evaluate(False, inputs, targets)
+        if self._evaluation_losses != losses or self._evaluate is None:
+            self._evaluation_losses = losses
+            if losses is None:
+                losses = self.exports.loss
+            elif isinstance(loss, str):
+                losses = self.exports[losses]
+            elif isinstance(loss, (tuple, list)):
+                losses = [self.exports[loss] if isinstance(loss, str) else loss
+                            for loss in losses]
+            else:
+                losses = losses
+            self._evaluate = self.session.make_callable(losses,
+                [self.exports.training, self.exports.inputs, self.exports.targets])
+        return self._evaluate(False, inputs, targets)
 
     def run(self, fetches, feed_dict):
         fetches = [self.exports[fetch] if isinstance(fetch, str) else fetch

@@ -49,7 +49,7 @@ def find_files(pattern="*.dcp", show_hidden=False):
 def _create_file(filename):
     directory = os.path.dirname(filename)
     if directory:
-        os.makedirs(self.dir, exist_ok=True)
+        os.makedirs(directory, exist_ok=True)
     file = open(filename, "wb")
     return file
 
@@ -240,9 +240,9 @@ class DataCollection(dict):
 
     def __init__(self, filename="{}.dcp"):
         super().__init__()
-        self.history = _CheckPointFileWrapper([], location=filename)
         if filename is not None:
             filename = _format_filename(filename)
+        self.history = _CheckPointFileWrapper([], location=filename)
         self.filename = filename
         if self.filename is not None:
             self.dir = os.path.dirname(self.filename)
