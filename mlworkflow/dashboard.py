@@ -32,7 +32,7 @@ def Dashboard(widgets):
         callback()
 
 
-def list_files(path="{}.dcp", key=None, reverse=False):
+def list_files(path="**.dcp", key=None, reverse=False):
     @kwonly_from_ctx
     def list_files(*, on_init, ctx):
         if isinstance(path, str):

@@ -1,23 +1,47 @@
+from itertools import takewhile
 import datetime
 import pickle
 import os
 import re
 
 
-def find_files(pattern="{}.dcp"):
+_pattern_filters = {"*":  r"[^{}]*".format(os.sep),
+                    "**": r".*"
+                    }
+
+
+def _select_filter(match):
+    match = match.group()
+    return _pattern_filters.get(match, match)
+
+
+def find_files(pattern="*.dcp", show_hidden=False):
     """Simply matches files following the provided pattern (one directory only)
     """
-    pattern = pattern.split(os.sep)
-    directory, pattern = os.path.join(*pattern[:-1]) \
-        if len(pattern) > 1 else ".", pattern[-1]
-    pattern = re.compile("^" + pattern.replace(".", r"\.")
-                                      .replace("{}", ".*") + "$")
-    filenames = next(os.walk(directory))[2]
+    sections = pattern.split("/")
+    root = tuple(takewhile(lambda section: "*" not in section, sections[:-1]))
+    pattern = sections[len(root):]
+
+    pattern = os.sep.join(pattern)
+    root = os.sep.join(root) if root else "./"
+    _recursive = "**" in pattern
+
+    pattern = re.sub(r"\**", _select_filter, pattern.replace(".", r"\."))
+    pattern = re.compile("^{}$".format(pattern))
+
     lst = []
-    for filename in filenames:
-        match = pattern.match(filename)
-        if match is not None:
-            lst.append(os.path.join(directory, filename))
+    prefix_length = len(root)
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirpath = dirpath[prefix_length:]
+        if dirpath.startswith(".") and not show_hidden:
+            continue
+        for filename in filenames:
+            path = os.path.join(dirpath, filename)
+            match = pattern.match(path)
+            if match is not None:
+                lst.append(os.path.join(root, path))
+        if not _recursive:
+            break
     lst.sort()
     return lst
 
