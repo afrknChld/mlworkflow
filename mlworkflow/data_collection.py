@@ -23,9 +23,6 @@ def find_files(pattern="{}.dcp"):
 
 
 def _create_file(filename):
-    dirname = os.path.dirname(filename)
-    if dirname:
-        os.makedirs(dirname, exist_ok=True)
     file = open(filename, "wb")
     return file
 
@@ -44,8 +41,28 @@ class _CheckPointWrapper(dict):
         return super().__getitem__(key)
 
 
+class _ExternalRetriever:
+    def __init__(self, namer, dirname):
+        self.namer = namer
+        self.dirname = dirname
+
+    def __getitem__(self, key):
+        name = self.namer[key]
+        return self.resolve(name)
+
+    def resolve(self, name):
+        if isinstance(name, list):
+            return [self.resolve(n) for n in name]
+        with open(os.path.join(self.dirname, name), "rb") as file:
+            return pickle.load(file)
+
+
 class _CheckPointFileWrapper(list):
     """Allows lists of _CheckPointWrapper and selection using slices"""
+    def __init__(self, *args, location):
+        super().__init__(*args)
+        self.location = location
+
     def __getitem__(self, key):
         if isinstance(key, tuple):
             assert len(key) == 2, ("Key tuple must be of length 2,"
@@ -69,6 +86,11 @@ class _CheckPointFileWrapper(list):
             checkpoint = dict(checkpoint_wrapper)
             pickler.dump(checkpoint)
         return file
+
+    @property
+    def external(self):
+        assert self.location is not None
+        return _ExternalRetriever(self, os.path.dirname(self.location))
 
 
 class _CheckPointLibraryWrapper(dict):
@@ -116,8 +138,8 @@ class DataCollection(dict):
     """
 
     @staticmethod
-    def load_with_parent(filename="{}.dcp", parent=None, *, slice=None,
-                         fields=None):
+    def create_with_parent(filename="{}.dcp", parent=None, *, slice=None,
+                           fields=None):
         assert parent is not None
         old = DataCollection.load_file(parent, slice=slice, fields=fields)
         data = DataCollection(filename)
@@ -173,7 +195,7 @@ class DataCollection(dict):
         if slice is not None:
             data = data[slice]
         if data is not None:
-            data = _CheckPointFileWrapper(data)
+            data = _CheckPointFileWrapper(data, location=filename)
         return data, metadata
 
     @staticmethod
@@ -186,10 +208,15 @@ class DataCollection(dict):
 
     def __init__(self, filename="{}.dcp"):
         super().__init__()
-        self.history = _CheckPointFileWrapper([])
+        self.history = _CheckPointFileWrapper([], location=filename)
         if filename is not None:
             filename = _format_filename(filename)
         self.filename = filename
+        if self.filename is not None:
+            self.dir = os.path.dirname(self.filename)
+            self.base = os.path.basename(self.filename)
+            if self.dir:
+                os.makedirs(self.dir, exist_ok=True)
         self.file = None
         self.pickler = None
 
@@ -207,8 +234,25 @@ class DataCollection(dict):
         super().__setitem__(key, value)
 
     @property
+    def iteration(self):
+        return len(self.history)
+
+    def save_external(self, key, value, may_skip=False):
+        if self.filename is None:
+            assert may_skip, ("No filename is provided. Please either provide "
+                              "one or allow skipping")
+            return
+        new_base = "{}_{}_{}".format(self.base, self.iteration, key)
+        new_filename = os.path.join(self.dir, new_base)
+        with _create_file(new_filename) as file:
+            pickle.dump(value, file)
+        self[key] = new_base
+        return new_filename
+
+    @property
     def history_(self):
-        return _CheckPointFileWrapper(self.history+[_CheckPointWrapper(self)])
+        return _CheckPointFileWrapper(self.history+[_CheckPointWrapper(self)],
+                                      location=self.filename)
 
     def _checkpoint(self, checkpoint):
         self.history.append(_CheckPointWrapper(checkpoint))
