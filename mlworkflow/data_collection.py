@@ -182,6 +182,151 @@ class DataCollection(dict):
     def add_metadata(filename, dic):
         assert isinstance(dic, dict), ("metadata must take the form of a "
                                        "dictionary")
+        with open(filename+"_", "ab") as file:
+            pickle.Pickler(file).dump(dic)
+
+    @staticmethod
+    def get_metadata(filename):
+        metadata = {}
+        try:
+            with open(filename+"_", "rb") as file:
+                unpickler = pickle.Unpickler(file)
+                try:
+                    while True:
+                        obj = unpickler.load()
+                        metadata.update(obj)
+                except EOFError:
+                    pass
+        except FileNotFoundError:
+            pass
+        return metadata
+
+    @staticmethod
+    def load_file(filename, *, slice=None, fields=None):
+        data = []
+        with open(filename, "rb") as file:
+            unpickler = pickle.Unpickler(file)
+            try:
+                while True:
+                    obj = unpickler.load()
+                    if fields is not None:
+                        obj = {k: v for k, v in obj.items() if k in fields}
+                    obj = _CheckPointWrapper(obj)
+                    data.append(obj)
+            except EOFError:
+                pass
+        if slice is not None:
+            data = data[slice]
+        return _CheckPointFileWrapper(data, location=filename)
+
+    @staticmethod
+    def load_files(filenames, *, slice=None, fields=None):
+        library = {}
+        for filename in filenames:
+            library[filename] = DataCollection.load_file(filename, slice=slice,
+                                                         fields=fields)
+        return _CheckPointLibraryWrapper(library)
+
+    def __init__(self, filename="{}.dcp"):
+        super().__init__()
+        if filename is not None:
+            filename = _format_filename(filename)
+        self.history = _CheckPointFileWrapper([], location=filename)
+        self.filename = filename
+        if self.filename is not None:
+            self.dir = os.path.dirname(self.filename)
+            self.base = os.path.basename(self.filename)
+        self.file = None
+        self.pickler = None
+
+    def __getitem__(self, key):
+        if isinstance(key, list):
+            return [self.__getitem__(k) for k in key]
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if isinstance(key, list):
+            assert len(key) == len(value)
+            for k, v in zip(key, value):
+                self.__setitem__(k, v)
+            return
+        super().__setitem__(key, value)
+
+    @property
+    def iteration(self):
+        return len(self.history)
+
+    def save_external(self, key, value, may_skip=False):
+        if self.filename is None:
+            assert may_skip, ("No filename is provided. Please either provide "
+                              "one or allow skipping")
+            return
+        new_base = "{}_{}_{}".format(self.base, self.iteration, key)
+        new_filename = os.path.join(self.dir, new_base)
+        with _create_file(new_filename) as file:
+            pickle.dump(value, file)
+        self[key] = new_base
+        return new_filename
+
+    @property
+    def history_(self):
+        return _CheckPointFileWrapper(self.history+[_CheckPointWrapper(self)],
+                                      location=self.filename)
+
+    def _checkpoint(self, checkpoint):
+        self.history.append(_CheckPointWrapper(checkpoint))
+        if self.filename is not None:
+            if self.file is None:
+                self.file = _create_file(self.filename)
+                self.pickler = pickle.Pickler(self.file)
+            self.pickler.dump(checkpoint)
+
+    def checkpoint(self, *names):
+        if not names:
+            names = self.keys()
+        checkpoint = {name: self[name]
+                      for name in names}
+        self._checkpoint(checkpoint)
+        return checkpoint
+
+    def close(self):
+        if self.file is not None:
+            self.file.close()
+
+
+class DataCollection_Legacy0(dict):
+    """A class for recording experimental results
+
+    >>> data = DataCollection(None) # No output file
+    >>> for i in range(10):
+    ...    data["iteration"] = i
+    ...    data["error"] = 1/(10**i)
+    ...    data.checkpoint()
+    {...}
+    >>> data.history[:,"iteration"]
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    >>> data.history[-2:, ["iteration", "error"]]
+    [[8, 1e-08], [9, 1e-09]]
+    """
+
+    @staticmethod
+    def create_with_parent(filename="{}.dcp", parent=None, *, slice=None,
+                           fields=None):
+        assert parent is not None
+        old = DataCollection.load_file(parent, slice=slice, fields=fields)
+        data = DataCollection(filename)
+        if data.filename is not None:
+            relpath = os.path.relpath(os.path.dirname(parent),
+                                      os.path.dirname(data.filename))
+            data["_parent"] = os.path.join(relpath, os.path.basename(parent))
+        else:
+            data["_parent"] = parent
+        return data, old
+
+    @staticmethod
+    def add_metadata(filename, dic):
+        assert isinstance(dic, dict), ("metadata must take the form of a "
+                                       "dictionary")
         with open(filename, "ab") as file:
             pickle.Pickler(file).dump(("metadata", dic))
 

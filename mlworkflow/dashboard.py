@@ -53,7 +53,8 @@ def list_files(path="**.dcp", key=None, reverse=False):
         def update_selected_file(change):
             filename = change["new"]
             ctx["filename"] = filename
-            ctx["data"], ctx["metadata"] = DataCollection.get_data_metadata(filename)
+            ctx["data"] = DataCollection.load_file(filename)
+            ctx["metadata"] = DataCollection.get_metadata(filename)
             for callback in _on_file_selection:
                 callback()
         selector.observe(update_selected_file, names="value")
