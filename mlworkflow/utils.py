@@ -4,6 +4,28 @@ import numpy as np
 import functools
 import sys
 
+from collections import deque
+from multiprocessing.pool import ThreadPool
+
+
+def warning(f=None, *, information):
+    def _warning(f):
+        thrown = False
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            nonlocal thrown
+            if not thrown and not warning.ignore:
+                print(r"/!\ {}.{} {}".format(f.__module__, f.__qualname__,
+                                        information),
+                      file=sys.stderr)
+                thrown = True
+            return f(*args, **kwargs)
+        return wrapper
+    if f is None:
+        return _warning
+    return _warning(f)
+warning.ignore = False
+
 
 @contextmanager
 def _seed(random, seed):
@@ -138,7 +160,8 @@ class DictObject(dict):
         return dict_object
 
     def __repr__(self):
-        return "{}({!r})".format(self.__qualname__, super().__repr__())
+        return "{}({!r})".format(self.__class__.__qualname__,
+                                 super().__repr__())
 
     @classmethod
     def from_dict(cls, dic):
@@ -181,6 +204,15 @@ class DictObject(dict):
         return target
 
 
+class DictDuplexWriter:
+    def __init__(self, *dicts):
+        self.dicts = dicts
+
+    def __setitem__(self, key, value):
+        for d in self.dicts:
+            d[key] = value
+
+
 class ListQueriableDict(dict):
     def __getitem__(self, key):
         sup = super()
@@ -194,3 +226,35 @@ class ListQueriableDict(dict):
             for k, v in zip(key, value):
                 sup.__setitem__(k, v)
         sup.__setitem__(key, value)
+
+
+class SideRunner:
+    def __init__(self):
+        self.pool = ThreadPool(1)
+        self.pending = deque()
+
+    def run_async(self, f):
+        handle = self.pool.apply_async(f)
+        self.pending.append(handle)
+        return handle
+
+    def collect_runs(self):
+        lst = [handle.get() for handle in self.pending]
+        self.pending.clear()
+        return lst
+
+    def yield_async(self, gen, in_advance=1):
+        pending = deque()
+        def consume(gen):
+            return next(gen, _no_value)
+        for i in range(in_advance):
+            pending.append(self.pool.apply_async(consume, args=(gen,)))
+        while True:
+            pending.append(self.pool.apply_async(consume, args=(gen,)))
+            p = pending.popleft().get()
+            if p is _no_value:
+                break
+            yield p
+
+    def __del__(self):
+        self.pool.close()

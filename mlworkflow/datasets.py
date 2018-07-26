@@ -1,4 +1,5 @@
 from pickle import Pickler, _Unpickler as Unpickler
+from mlworkflow.utils import warning
 from abc import ABCMeta, abstractmethod
 import numpy as np
 import functools
@@ -13,10 +14,6 @@ from collections import deque, ChainMap
 from multiprocessing.pool import Pool
 from contextlib import contextmanager
 import math
-
-
-def deprecated(f):
-    return f
 
 
 def chunkify(iterable, n):
@@ -580,9 +577,14 @@ class DictDataset(Dataset):
         return self.dic[key]
 
 
-@deprecated
+@warning(information="is deprecated and will most likely be removed in a near "
+                     "future.")
 class ParallelizeDataset(Dataset):
-    """TODO: Clean, not very usable yet"""
+    """Since process pools are not efficient, use
+    mlworkflow.SideRunner().yield_async(dataset.batches(...)) instead of
+    wrapping your dataset in a ParallelizeDataset
+    """
+    # TODO: remove
     def __init__(self, dataset, pool, batches_ahead=1,
                  processes_per_batch=None):
         self.dataset = dataset
