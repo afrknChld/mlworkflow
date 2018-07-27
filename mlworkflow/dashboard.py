@@ -1,14 +1,16 @@
 from mlworkflow import DataCollection, LivePanels, find_files
 from mlworkflow.utils import kwonly_from_ctx, DictObject
-from IPython import display
 from ipywidgets import (Select, VBox, HBox, Textarea, Button, Text, Output,
                         Label)
+from IPython import display
+import os
+import re
 
 
 __all__ = ["Dashboard",
            # Widgets
            "comment", "list_files", "recording", "tags", "vbox",
-           "list_properties", "filename",
+           "list_properties", "filename", "execute",
 ]
 
 
@@ -72,7 +74,7 @@ def comment():
     @kwonly_from_ctx
     def comment(*, on_file_selection, ctx):
         content = Textarea(placeholder="Any comment?")
-        submit = Button(description="Save")
+        submit = Button(description="Save comment")
         @on_file_selection
         def update_content():
             content.value = ctx["metadata"].get("comment", "")
@@ -114,6 +116,13 @@ def recording(fields=["head", "body"]):
 
 
 def filename(tag="h3", link_parent=False):
+    def parent_path(child_data):
+        parent = child_data[-1,"_parent":None]
+        if parent is not None:
+            parent = os.path.join(os.path.dirname(child_data.filename), parent)
+            parent = os.path.normpath(parent)
+        return parent
+
     @kwonly_from_ctx
     def filename(*, file_selector, on_file_selection, ctx):
         widget = html = Output()
@@ -122,12 +131,12 @@ def filename(tag="h3", link_parent=False):
             parent_button = Button(description="show")
             @parent_button.on_click
             def show_parent(_):
-                file_selector.value = ctx["data"][-1,"_parent":None]
+                file_selector.value = parent_path(ctx["data"])
             widget = VBox([html, HBox([parent_label, parent_button])])
         @on_file_selection
         def update():
             if link_parent:
-                parent = ctx["data"][-1,"_parent":None]
+                parent = parent_path(ctx["data"])
                 if parent is not None:
                     parent_label.value = "Parent: "+parent
                     parent_button.disabled = False
@@ -158,3 +167,22 @@ def list_properties():
                 )))
         return output
     return list_properties
+
+
+def execute(globals, field="comment"):
+    @kwonly_from_ctx
+    def exec_code(*, ctx, on_file_selection):
+        output = Output()
+        @on_file_selection
+        def update():
+            text = ctx["metadata"].get(field, "")
+            code_sections = re.findall(r"```(.*?)```", text,
+                                       re.MULTILINE|re.DOTALL)
+            with output:
+                display.clear_output()
+                env = {**globals,
+                       "data": ctx["data"]}
+                for code in code_sections:
+                    exec(code, env)
+        return output
+    return exec_code

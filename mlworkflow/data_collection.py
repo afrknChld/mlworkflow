@@ -86,9 +86,9 @@ class _ExternalRetriever:
 
 class _CheckPointFileWrapper(list):
     """Allows lists of _CheckPointWrapper and selection using slices"""
-    def __init__(self, *args, location):
+    def __init__(self, *args, filename):
         super().__init__(*args)
-        self.location = location
+        self.filename = filename
 
     def __getitem__(self, key):
         if isinstance(key, tuple):
@@ -116,8 +116,8 @@ class _CheckPointFileWrapper(list):
 
     @property
     def external(self):
-        assert self.location is not None
-        return _ExternalRetriever(self, os.path.dirname(self.location))
+        assert self.filename is not None
+        return _ExternalRetriever(self, os.path.dirname(self.filename))
 
 
 class _CheckPointLibraryWrapper(dict):
@@ -217,7 +217,7 @@ class DataCollection(dict):
                 pass
         if slice is not None:
             data = data[slice]
-        return _CheckPointFileWrapper(data, location=filename)
+        return _CheckPointFileWrapper(data, filename=filename)
 
     @staticmethod
     def load_files(filenames, *, slice=None, fields=None):
@@ -231,7 +231,7 @@ class DataCollection(dict):
         super().__init__()
         if filename is not None:
             filename = _format_filename(filename)
-        self.history = _CheckPointFileWrapper([], location=filename)
+        self.history = _CheckPointFileWrapper([], filename=filename)
         self.filename = filename
         if self.filename is not None:
             self.dir = os.path.dirname(self.filename)
@@ -271,7 +271,7 @@ class DataCollection(dict):
     @property
     def history_(self):
         return _CheckPointFileWrapper(self.history+[_CheckPointWrapper(self)],
-                                      location=self.filename)
+                                      filename=self.filename)
 
     def _checkpoint(self, checkpoint):
         self.history.append(_CheckPointWrapper(checkpoint))
@@ -372,7 +372,7 @@ class DataCollection_Legacy0(dict):
         if slice is not None:
             data = data[slice]
         if data is not None:
-            data = _CheckPointFileWrapper(data, location=filename)
+            data = _CheckPointFileWrapper(data, filename=filename)
         return data, metadata
 
     @staticmethod
@@ -387,7 +387,7 @@ class DataCollection_Legacy0(dict):
         super().__init__()
         if filename is not None:
             filename = _format_filename(filename)
-        self.history = _CheckPointFileWrapper([], location=filename)
+        self.history = _CheckPointFileWrapper([], filename=filename)
         self.filename = filename
         if self.filename is not None:
             self.dir = os.path.dirname(self.filename)
@@ -427,7 +427,7 @@ class DataCollection_Legacy0(dict):
     @property
     def history_(self):
         return _CheckPointFileWrapper(self.history+[_CheckPointWrapper(self)],
-                                      location=self.filename)
+                                      filename=self.filename)
 
     def _checkpoint(self, checkpoint):
         self.history.append(_CheckPointWrapper(checkpoint))
