@@ -50,8 +50,9 @@ def run_in_cell(f=None, level=0):
             _exec(body_code, level=level+1, custom_globals=custom_globals)
         except ReturnException as e:
             res = e.args[0]
-        f.result = res
-        return f
+        finally:
+            f.result = res
+            return f
     if f is None:
         return decorator
     else:
