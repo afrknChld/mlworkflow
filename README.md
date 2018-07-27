@@ -1,4 +1,4 @@
-Please have a look at *Tutorial.ipynb*! However, if you want a quick preview of the outputs of the cells, you may visualize the HTML after execution of the cells: [tutorial_page.html](https://htmlpreview.github.io/?https://github.com/mistasse/mlworkflow/blob/master/tutorial_page.html) which is nececssary as dynamic widgets are not saved in *.ipynb* files.
+Please have a look at *Tutorial.ipynb*! However, if you want a quick preview of the outputs of the cells, you may visualize the HTML after execution of the cells: [tutorial_page.html](https://mlworkflow.github.io/tutorial_page.html) which is nececssary as dynamic widgets are not saved in *.ipynb* files.
 
 ## What is mlworkflow?
 
