@@ -119,6 +119,10 @@ class Ref(Evaluable):
         return Ref(path)
 
 
+def ListFromArgs(*args):
+    return list(args)
+
+
 class Call(Evaluable):
     """A malleable and picklable representation for a call.
 
@@ -137,7 +141,8 @@ class Call(Evaluable):
     foo,bar
     """
 
-    def __init__(self, callable, modattr=None, *, args=(), kwargs={}):
+    def __init__(self, callable, modattr=None, *, args=(), kwargs={},
+                 partial=False):
         if modattr is None:
             if isinstance(callable, Evaluable):
                 self.reference = callable
@@ -148,9 +153,19 @@ class Call(Evaluable):
             self.reference = GlobalRef(callable, modattr)
         self.args = args
         self.kwargs = kwargs
+        self._partial = partial
+
+    @staticmethod
+    def _new(callable, modattr=None, *, args, kwargs, partial):
+        """Internal variant of Call() enforcing all the parameters to have
+        so it is easier to check that internal call creation respects clones
+        all the fields it should"""
+        return Call(callable, modattr, args=args, kwargs=kwargs,
+                    partial=partial)
 
     def __reduce__(self):
-        return Call._v0, (self.reference, self.args, self.kwargs)
+        return Call._v1, (self.reference, self.args, self.kwargs,
+                          self._partial)
 
     def __getitem__(self, key):
         if isinstance(key, tuple):
@@ -160,24 +175,31 @@ class Call(Evaluable):
         return self.kwargs[key]
 
     def on(self, callable, modattr=None):
-        return Call(callable, modattr, args=self.args, kwargs=self.kwargs)
+        return Call._new(callable, modattr, args=self.args, kwargs=self.kwargs,
+                         partial=self._partial)
 
     def with_args(self, *args):
         new_args = sum(((_transform_call_arg(arg),)
                         if arg is not Ellipsis else self.args
                         for arg in args), ())
-        return Call(self.reference, args=new_args, kwargs=self.kwargs)
+        return Call._new(self.reference, args=new_args, kwargs=self.kwargs,
+                         partial=self._partial)
 
     def __call__(self, **kwargs):
         new_kwargs = {**self.kwargs, **{k: _transform_call_arg(v)
                                         for k, v in kwargs.items()}}
-        return Call(self.reference, args=self.args, kwargs=new_kwargs)
+        return Call._new(self.reference, args=self.args, kwargs=new_kwargs,
+                         partial=self._partial)
 
     def eval(self, env=None):
         ref, args, kwargs = self._eval_rak(env)
+        if self._partial:
+            return lambda *_args, **_kwargs: ref(*args, *_args,
+                                                 **kwargs, **_kwargs)
         return ref(*args, **kwargs)
 
     def _eval_rak(self, env):
+        """Evaluates reference, arguments and keyword arguments recursively"""
         ref = self.reference.eval(env)
         args = [arg.eval(env) if isinstance(arg, Evaluable) else arg
                 for arg in self.args]
@@ -190,7 +212,8 @@ class Call(Evaluable):
             return False
         return (self.reference == other.reference and
                 self.args == other.args and
-                self.kwargs == other.kwargs)
+                self.kwargs == other.kwargs and
+                self._partial == other._partial)
 
     def _format_ref(self):
         if isinstance(self.reference, GlobalRef):
@@ -200,14 +223,17 @@ class Call(Evaluable):
             return repr(self.reference)
 
     def __repr__(self):
-        kwargs = args = ""
+        kwargs = args = partial = ""
         if self.args:
             args = ".with_args({})".format(", ".join(repr(arg)
                                                      for arg in self.args))
         if self.kwargs:
             kwargs = "({})".format(", ".join("{}={!r}".format(k, v)
                                              for k, v in self.kwargs.items()))
-        return "Call({}){}{}".format(self._format_ref(), args, kwargs)
+        if self._partial:
+            partial = ".partial()"
+        return "Call({}){}{}{}".format(self._format_ref(),
+                                       args, kwargs, partial)
 
     def __str__(self):
         s = ["Call({})".format(self._format_ref())]
@@ -236,37 +262,30 @@ class Call(Evaluable):
                 s.append(",\n" + indentation)
             s[-1] = s[-1][1:-1]  # remove comma and space
             s.append(")")
+        if self._partial:
+            s.append(".partial()")
         return "".join(s)
 
     def partial(self):
-        return Call._Partial(self)
+        return Call._new(self.reference, args=self.args, kwargs=self.kwargs,
+                         partial=True)
+
+    def plain(self):
+        return Call._new(self.reference, args=self.args, kwargs=self.kwargs,
+                         partial=False)
 
     @staticmethod
-    def _v0(evaluable, args, kwargs):
-        return Call(evaluable, args=args, kwargs=kwargs)
+    def _v1(evaluable, args, kwargs, partial):
+        return Call._new(evaluable, args=args, kwargs=kwargs, partial=partial)
 
-    class _Partial(Evaluable):
-        def __init__(self, call):
-            self.call = call
+    @staticmethod
+    def _v0(evaluable, args, kwargs):  # Legacy code for unpickling old calls
+        return Call._new(evaluable, args=args, kwargs=kwargs, partial=False)
 
-        def __reduce__(self):
-            return Call._Partial._v0, (self.call,)
-
-        def eval(self, env=None):
-            ref, args, kwargs = self.call._eval_rak(env)
-            from functools import partial
-            return lambda *_args, **_kwargs: ref(*args, *_args,
-                                                 **kwargs, **_kwargs)
-
-        def __repr__(self):
-            return "{!r}.partial()".format(self.call)
-
-        def __str__(self):
-            return "{}.partial()".format(self.call)
-
+    class _Partial(Evaluable):  # legacy code for unpickling old partial calls
         @staticmethod
         def _v0(call):
-            return Call._Partial(call)
+            return call.partial()
 
 
 class Exec(Evaluable, dict):
