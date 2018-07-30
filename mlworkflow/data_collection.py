@@ -18,29 +18,32 @@ def _select_filter(match):
 def find_files(pattern="*.dcp", show_hidden=False):
     """Simply matches files following the provided pattern (one directory only)
     """
+    skip_hidden = not show_hidden
     sections = pattern.split("/")
     root = tuple(takewhile(lambda section: "*" not in section, sections[:-1]))
     pattern = sections[len(root):]
+    recursive = len(pattern) > 1
 
     pattern = os.sep.join(pattern)
-    root = os.sep.join(root) if root else "./"
-    _recursive = "**" in pattern
+    root = (os.sep.join(root) if root else ".") + os.sep
 
-    pattern = re.sub(r"\**", _select_filter, pattern.replace(".", r"\."))
+    pattern = re.sub(r"\*+", _select_filter, pattern.replace(".", r"\."))
     pattern = re.compile("^{}$".format(pattern))
 
     lst = []
     prefix_length = len(root)
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True):
         dirpath = dirpath[prefix_length:]
-        if dirpath.startswith(".") and not show_hidden:
-            continue
+        if skip_hidden:
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         for filename in filenames:
+            if skip_hidden and filename.startswith("."):
+                continue
             path = os.path.join(dirpath, filename)
             match = pattern.match(path)
             if match is not None:
                 lst.append(os.path.join(root, path))
-        if not _recursive:
+        if not recursive:
             break
     lst.sort()
     return lst
