@@ -2,17 +2,16 @@ from contextlib import contextmanager
 from importlib import import_module
 from datetime import datetime
 from types import ModuleType
-from difflib import Differ
 
 import linecache
 import textwrap
 import inspect
+import difflib
 import time
 import sys
 import re
 
 _no_value = object()
-differ = Differ()
 _leading_whitespace_re = re.compile('^([ ]*)(?:[^ \n])')
 
 
@@ -76,33 +75,29 @@ class ModuleSaver:
             else:
                 sys.modules[base_name] = base_module
 
-    def diff(self, mode="blocks"):
-        newer = inspect.getsource(import_module(self.base_name)).splitlines()
-        older = self.source.splitlines()
-        diff = list(d+"\n" for d in differ.compare(older, newer))
-        if mode == "complete":
-            return "".join(diff)
-        if mode == "blocks":
-            offset = 0
-            blocks = []
-            current_block = []
-            ws_buffer = []
-            for line in diff:
-                ws = _leading_whitespace_re.match(line[2:])
-                if ws is None:
-                    ws_buffer.append(line)
-                elif len(ws.group(1)) > 0:
-                    current_block.extend(ws_buffer)
-                    ws_buffer = []
-                    current_block.append(line)
-                else:
-                    ws_buffer = []
-                    if any(l[0] != " " for l in current_block):
-                        blocks.append(current_block)
-                    current_block = [line]
-            if any(l[0] != " " for l in current_block):
-                blocks.append(current_block)
-            return "".join(sum(blocks, []))
+    def diff(self, mode="unified", base_is_target=True, colored=False):
+        def _color(line):
+            if line.startswith("+"):
+                return "\x1b[32m"+line+"\x1b[0m"
+            if line.startswith("-"):
+                return "\x1b[31m"+line+"\x1b[0m"
+            return line
+
+        fname = self.uname
+        flines = self.source.splitlines()
+        tname = self.base_name
+        tlines = inspect.getsource(import_module(self.base_name)).splitlines()
+        if not base_is_target:
+            fname, tname = tname, fname
+            flines, tlines = tlines, flines
+
+        if mode == "unified":
+            diff = difflib.unified_diff(flines, tlines, lineterm="",
+                                        fromfile=fname,
+                                        tofile=tname)
+            if colored:
+                diff = (_color(d) for d in diff)
+            return "\n".join(diff)
         raise Exception("{!r} is not a valid value for 'mode'".format(mode))
     
     def __reduce__(self):

@@ -3,6 +3,7 @@ from mlworkflow.utils import kwonly_from_ctx, DictObject
 from ipywidgets import (Select, VBox, HBox, Textarea, Button, Text, Output,
                         Label)
 from IPython import display
+import difflib
 import os
 import re
 
@@ -205,7 +206,7 @@ def field_to_string(field, default_text=None):
     return field_to_string
 
 
-def diff(field="module", mode="blocks"):
+def diff(mode="unified", field="module", base_is_target=False, colored=True):
     @kwonly_from_ctx
     def diff(*, ctx, on_file_selection):
         output = Output()
@@ -216,7 +217,8 @@ def diff(field="module", mode="blocks"):
                 return
             with output:
                 display.clear_output()
-                print(module.diff(mode=mode))
+                print(module.diff(mode=mode, colored=colored,
+                                  base_is_target=base_is_target))
         return output
     return diff
 
