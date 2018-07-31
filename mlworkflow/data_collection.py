@@ -58,8 +58,11 @@ def _create_file(filename):
 
 
 def _format_filename(filename):
-    return filename.format(datetime.datetime.now()
-                           .strftime("%Y%m%d_%H%M%S"))
+    datetime_ = datetime.datetime.now()
+    d = datetime_.strftime("%Y%m%d")
+    t = datetime_.strftime("%H%M%S")
+    dt = "{}_{}".format(d, t)
+    return filename.format(dt, dt=dt, d=d, t=t)
 
 
 class _CheckPointWrapper(dict):
