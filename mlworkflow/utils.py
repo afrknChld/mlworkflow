@@ -160,8 +160,8 @@ class DictObject(dict):
         return dict_object
 
     def __repr__(self):
-        return "{}({!r})".format(self.__class__.__qualname__,
-                                 super().__repr__())
+        return "{}({})".format(self.__class__.__qualname__,
+                               super().__repr__())
 
     @classmethod
     def from_dict(cls, dic):
