@@ -70,47 +70,49 @@ def vbox(*decls):
     return vbox
 
 
-def comment():
+def comment(field="comment"):
     @kwonly_from_ctx
     def comment(*, on_file_selection, ctx):
         content = Textarea(placeholder="Any comment?")
         submit = Button(description="Save comment")
         @on_file_selection
         def update_content():
-            content.value = ctx["metadata"].get("comment", "")
+            content.value = ctx["metadata"].get(field, "")
         @submit.on_click
         def on_click(_):
-            DataCollection.add_metadata(ctx["filename"], {"comment":content.value})
+            DataCollection.add_metadata(ctx["filename"], {field:content.value})
         return VBox([content, submit])
     return comment
 
 
-def tags():
+def tags(field="tags"):
     @kwonly_from_ctx
     def tags(*, on_file_selection, ctx):
         tags = Text()
         button = Button(description="Save Tags")
         @on_file_selection
         def update_tags():
-            tags.value = " ".join(ctx["metadata"].get("tags", []))
+            tags.value = " ".join(ctx["metadata"].get(field, []))
         @button.on_click
         def on_click(_):
-            DataCollection.add_metadata(ctx["filename"], {"tags":tags.value.split()})
+            DataCollection.add_metadata(ctx["filename"], {field:tags.value.split()})
         return HBox([tags, button])
     return tags
 
 
-def recording(fields=["head", "body"]):
+def recording(sections=["head", "body"], field="recording"):
     @kwonly_from_ctx
     def recording(*, on_file_selection, ctx):
         slider = Output()
         _panels = {}
-        for field in fields:
-            _panels[field] = Output()
-        panels = LivePanels(fields, panels=_panels, slider=slider)
+        for section in sections:
+            _panels[section] = Output()
+        panels = LivePanels(sections, panels=_panels, slider=slider)
         @on_file_selection
         def update_content():
-            panels.show_recording(ctx["data"][:,"recording"])
+            recording = ctx["data"][:,field:None]
+            if recording is not None:
+                panels.show_recording(recording)
         return VBox((slider,)+tuple(_panels.values()))
     return recording
 
@@ -186,3 +188,89 @@ def execute(globals, field="comment"):
                     exec(code, env)
         return output
     return exec_code
+
+
+def field_to_string(field, default_text=None):
+    @kwonly_from_ctx
+    def field_to_string(*, ctx, on_file_selection):
+        output = Output()
+        @on_file_selection
+        def update():
+            to_show = ctx["data"][-1,field:default_text]
+            with output:
+                display.clear_output()
+                if to_show is not None:
+                    print(to_show)
+        return output
+    return field_to_string
+
+
+def diff(field="module", mode="blocks"):
+    @kwonly_from_ctx
+    def diff(*, ctx, on_file_selection):
+        output = Output()
+        @on_file_selection
+        def update():
+            module = ctx["data"][-1,field:None]
+            if module is None:
+                return
+            with output:
+                display.clear_output()
+                print(module.diff(mode=mode))
+        return output
+    return diff
+
+
+def hide():
+    import time
+    _id = time.clock()
+    _id = "".join(["abcdefghij"[int(c)] for c in str(_id) if c != "."])
+    display.display(display.HTML("""
+        <div id="{id}" style="display:none">&nbsp;</div>
+        <script type="text/javascript">
+            current = $("#{id}")
+            cell = current
+            while(!cell.hasClass("cell")) {{
+                cell = cell.parent();
+            }}
+            input = cell.find(".input .inner_cell")
+            input.css("display", "none")
+            cell.dblclick(function() {{
+                input.css("display", "block")
+            }})
+        </script>
+    """.format(id="_{}".format(_id))))
+
+
+def delete():
+    @kwonly_from_ctx
+    def delete(*, ctx, on_file_selection, file_selector):
+        button = Button(description="Delete")
+        output = Output()
+        file = None
+        files = None
+        @button.on_click
+        def click(_):
+            nonlocal file, files
+            if files is None:
+                files = find_files(file+"*")
+                with output:
+                    print("\n".join(files))
+            else:
+                for to_delete in files:
+                    os.remove(to_delete)
+                with output:
+                    display.clear_output()
+                file_selector.options = tuple(option
+                                              for option in file_selector.options
+                                              if option != file)
+                files = file = None
+        @on_file_selection
+        def update():
+            nonlocal file, files
+            files = None
+            with output:
+                display.clear_output()
+            file = ctx["filename"]
+        return VBox([output, button])
+    return delete
