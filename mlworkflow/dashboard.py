@@ -247,30 +247,29 @@ def delete():
     def delete(*, ctx, on_file_selection, file_selector):
         button = Button(description="Delete")
         output = Output()
-        file = None
-        files = None
+        files_to_delete = None
         @button.on_click
         def click(_):
-            nonlocal file, files
-            if files is None:
-                files = find_files(file+"*")
+            nonlocal files_to_delete
+            if files_to_delete is None:
+                files_to_delete = find_files(ctx["filename"]+"*")
                 with output:
-                    print("\n".join(files))
+                    print("\n".join(files_to_delete))
             else:
-                for to_delete in files:
-                    os.remove(to_delete)
+                for file_to_delete in files_to_delete:
+                    os.remove(file_to_delete)
+                deleted_set = set(files_to_delete)
+                files_to_delete = None
                 with output:
                     display.clear_output()
                 file_selector.options = tuple(option
                                               for option in file_selector.options
-                                              if option != file)
-                files = file = None
+                                              if option not in deleted_set)
         @on_file_selection
-        def update():
-            nonlocal file, files
-            files = None
+        def reset():
+            nonlocal files_to_delete
+            files_to_delete = None
             with output:
                 display.clear_output()
-            file = ctx["filename"]
         return VBox([output, button])
     return delete
