@@ -9,3 +9,4 @@ from mlworkflow.interactive import LivePanels
 from mlworkflow.notebook import Notebook, run_in_cell
 from mlworkflow.keras_utils import get_keras_weights, set_keras_weights
 from mlworkflow.utils import _seed as seed, SideRunner
+from mlworkflow.mod_utils import ModuleSaver
