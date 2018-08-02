@@ -173,7 +173,7 @@ class DictObject(dict):
             copy[k] = v
         return copy
     copy = __copy__
-    
+
     def __deepcopy__(self, memo=None):
         from copy import deepcopy
         copy = self.__class__.__new__(self.__class__)
@@ -258,3 +258,4 @@ class SideRunner:
 
     def __del__(self):
         self.pool.close()
+        self.pool.join()
