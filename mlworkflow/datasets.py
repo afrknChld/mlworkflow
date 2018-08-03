@@ -330,7 +330,6 @@ class AugmentedDataset(Dataset, metaclass=ABCMeta):
 class FilteredDataset(AugmentedDataset):
     def __init__(self, dataset, filter, keep_positive=True):
         super().__init__(dataset)
-        self.dataset = dataset
         self.filter = filter
         self.keep_positive = keep_positive
 
