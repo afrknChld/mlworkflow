@@ -315,8 +315,12 @@ class AugmentedDataset(Dataset, metaclass=ABCMeta):
         for root_key in self.dataset.list_keys():
             yield from self._augment(root_key).keys()
 
+    def root_key(self, key):
+        return key[0]
+
     def query_item(self, key):
-        return self._augment(key[0])[key]
+        root_key = self.root_key(key)
+        return self._augment(root_key)[key]
 
     @abstractmethod
     def augment(self, root_key, root_item):
