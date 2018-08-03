@@ -327,6 +327,21 @@ class AugmentedDataset(Dataset, metaclass=ABCMeta):
         pass
 
 
+class FilteredDataset(AugmentedDataset):
+    def __init__(self, dataset, filter, keep_positive=True):
+        super().__init__(dataset)
+        self.dataset = dataset
+        self.filter = filter
+        self.keep_positive = keep_positive
+
+    def augment(self, key, item):
+        if self.filter(key, item) is self.keep_positive:
+            yield (key, item)
+
+    def root_key(self, child_key):
+        return child_key
+
+
 class CachedDataset(Dataset):
     """Creates a dataset caching the result of another"""
     def __init__(self, dataset):
