@@ -328,17 +328,23 @@ class AugmentedDataset(Dataset, metaclass=ABCMeta):
 
 
 class FilteredDataset(AugmentedDataset):
-    def __init__(self, dataset, filter, keep_positive=True):
+    def __init__(self, dataset, predicate, keep_positive=True):
         super().__init__(dataset)
-        self.filter = filter
+        self.predicate = predicate
         self.keep_positive = keep_positive
 
     def augment(self, key, item):
-        if self.filter(key, item) is self.keep_positive:
+        truth_value = self.predicate(key, item)
+        if truth_value is self.keep_positive:
             yield (key, item)
+        else:
+            assert truth_value is (not self.keep_positive), (
+                "Predicate {!r} should return a boolean value"
+                .format(self.predicate)
+            )
 
-    def root_key(self, child_key):
-        return child_key
+    def root_key(self, key):
+        return key
 
 
 class CachedDataset(Dataset):
