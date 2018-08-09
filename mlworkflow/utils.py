@@ -115,6 +115,7 @@ def kwonly_from_ctx(f):
             from_ctx = ctx.get(name, _no_value)
             if from_ctx is not _no_value:
                 kwargs[name] = from_ctx
+                continue
             # Otherwise, provide its default value. It is fillable, a ctx_or
             from_default = kwonlydefaults.get(name, _no_value)
             if from_default is not _no_value:
