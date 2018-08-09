@@ -17,6 +17,10 @@ def run_in_cell(f=None, level=0):
         class ReturnException(Exception):
             pass
         class ReturnTransformer(ast.NodeTransformer):
+            def visit_FunctionDef(self, node):
+                return node
+            def visit_AsyncFunctionDef(self, node):
+                return node
             def visit_Return(self, node):
                 return ast.copy_location(
                     ast.Raise(exc=ast.Call(func=ast.Name("__ReturnException",
