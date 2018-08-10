@@ -53,7 +53,7 @@ class ModuleSaver:
     @property
     def module(self):
         if self._module is None:
-            self._module = ModuleType(self.uname)
+            self._module = ModuleType(self.base_name)
             code_cache.cache(self.source, self.uname)
             code = compile(self.source, self.uname, "exec")
             exec(code, self._module.__dict__)
@@ -99,6 +99,9 @@ class ModuleSaver:
                 diff = (_color(d) for d in diff)
             return "\n".join(diff)
         raise Exception("{!r} is not a valid value for 'mode'".format(mode))
+
+    def __repr__(self):
+        return "ModuleSaver({!r})".format(self.uname)
     
     def __reduce__(self):
         return ModuleSaver._v0, (self.base_name, self.source,
@@ -130,6 +133,7 @@ class _CodeCache:
                  [line+'\n' for line in code.splitlines()], name)
         linecache.cache[name] = entry
         linecache._mlwf_cache[name] = entry
+        return name
 
 
 def _check_linecache_mlworkflow(*args):
@@ -142,6 +146,74 @@ def _check_linecache_mlworkflow(*args):
 
 
 code_cache = _CodeCache()
+
+
+_pattern_filters = {"*":  r"[^\.]*",
+                    "**": r".*"
+                    }
+
+
+def _select_filter(match):
+    match = match.group()
+    return _pattern_filters.get(match, match)
+
+
+class ModuleCollection:
+    def __init__(self, *, modules=None, pattern=None):
+        self.modules = []
+
+        if modules:
+            for module in modules:
+                if isinstance(module, ModuleSaver):
+                    self.modules.append(module)
+                else:
+                    self.modules.append(ModuleSaver(module))
+
+        if pattern is not None:
+            pattern = re.sub(r"\*+", _select_filter, pattern.replace(".", r"\."))
+            pattern = re.compile("^{}$".format(pattern))
+            for modname in sys.modules:
+                if pattern.match(modname) is not None:
+                    self.modules.append(ModuleSaver(sys.modules[modname]))
+
+    def __enter__(self):
+        self._ctx_managers = [m.as_base() for m in self.modules]
+        for ctx_manager in self._ctx_managers:
+            ctx_manager.__enter__()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        handled_exception = None
+        for ctx_manager in self._ctx_managers[::-1]:
+            if ctx_manager.__exit__(exc_type, exc_value, traceback):
+                handled_exception = True
+                exc_type, exc_value, traceback = None, None, None
+        return handled_exception
+
+    def __repr__(self):
+        return "ModuleCollection({!r})".format(self.modules)
+
+    def __reduce__(self):
+        return ModuleSet._v0, (self.modules,)
+
+    @staticmethod
+    def _v0(modules):
+        module_set = ModuleSet(modules=modules)
+        return module_set
+
+
+try:
+    from IPython import get_ipython
+    from IPython.core.magic import register_cell_magic
+except ImportError:
+    pass
+else:
+    _ip = get_ipython()
+    if _ip is not None:
+        @register_cell_magic
+        def virtual_module(line, cell):
+            name, *flags = line.split()
+            mod = ModuleSaver(name, cell)
+            sys.modules[name] = _ip.user_global_ns[name] = mod.module
 
 
 if __name__ == "__main__":
