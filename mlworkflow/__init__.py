@@ -1,7 +1,7 @@
 
 # Quick access to main features
-from mlworkflow.datasets import Dataset, AugmentedDataset, TransformedDataset,\
-    CachedDataset, PickledDataset, pickle_or_load
+from mlworkflow.datasets import Dataset, AugmentedDataset, FilteredDataset,\
+    TransformedDataset, CachedDataset, PickledDataset, pickle_or_load
 
 from mlworkflow.data_collection import DataCollection, find_files
 from mlworkflow.environment import Call, Exec, Ref, Environment, ListFromArgs
