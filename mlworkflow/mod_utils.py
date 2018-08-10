@@ -193,11 +193,11 @@ class ModuleCollection:
         return "ModuleCollection({!r})".format(self.modules)
 
     def __reduce__(self):
-        return ModuleSet._v0, (self.modules,)
+        return ModuleCollection._v0, (self.modules,)
 
     @staticmethod
     def _v0(modules):
-        module_set = ModuleSet(modules=modules)
+        module_set = ModuleCollection(modules=modules)
         return module_set
 
 
