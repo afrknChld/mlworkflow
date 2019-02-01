@@ -1,31 +1,23 @@
-from experiment.data_freezing import PickleSaver, ImageSaver, Pickleb64Freezer, CallFreezer, RelModulesFreezer
-from experiment.file_handling import _format_filename
+from mlworkflow.data_freezing import (CallFreezer, ImageSaver, Pickleb64Freezer,
+    PickleSaver, RelModulesFreezer)
+from mlworkflow.file_handling import _format_filename
+from mlworkflow.json_handling import djson_dump, djsonc_loads
 from abc import ABCMeta, abstractmethod
 from collections import ChainMap
 from functools import wraps
-import json
 import os
 
 
-def _create_file(filename):
-    directory = os.path.dirname(filename)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    file = open(filename, "w")
-    return file
-
-
 class _Provider(metaclass=ABCMeta):
-    pickleb64 = property(Pickleb64Freezer)
+    call = property(CallFreezer)
+    image = png = property(ImageSaver)
     modules = property(RelModulesFreezer)
     pickle = property(PickleSaver)
-    image = png = property(ImageSaver)
-    call = property(CallFreezer)
+    pickleb64 = property(Pickleb64Freezer)
 
 
 class DataCollection(ChainMap, _Provider):
     """A class for recording experimental results
-
     """
 
     def add_metadata(self, dic):
@@ -33,7 +25,7 @@ class DataCollection(ChainMap, _Provider):
         assert isinstance(dic, dict), ("metadata must take the form of a "
                                        "dictionary")
         with open(filename+"_", "a") as file:
-            json.dump(dic, file, separators=(',',':'))
+            djson_dump(dic, file, separators=(',',':'))
             file.write("\n")
             file.flush()
 
@@ -43,7 +35,7 @@ class DataCollection(ChainMap, _Provider):
             s = file.readline()
             if not s:
                 break
-            yield json.loads(s)
+            yield djsonc_loads(s)
 
     def get_metadata(self):
         filename = self.filename if isinstance(self, DataCollection) else self
@@ -58,23 +50,32 @@ class DataCollection(ChainMap, _Provider):
 
     @staticmethod
     def load_file(filename):
+        with open(filename, "r") as file:
+            return DataCollection._load_file_from_fp(file, filename)
+
+    @staticmethod
+    def _load_file_from_fp(file, filename):
         cum = {}
         data = []
-        with open(filename, "r") as file:
-            for obj in DataCollection._read_json(file):
-                cum = {**cum, **obj}  # Cumulate fields
-                data.append(_CheckPointWrapper(cum))  # Wrap
+        for obj in DataCollection._read_json(file):
+            cum = {**cum, **obj}  # Cumulate fields
+            data.append(_CheckPointWrapper(cum))  # Wrap
         return _CheckPointFileWrapper(data, filename=filename)
 
-    def __init__(self, filename="{}.json"):
+    def __init__(self, filename="{}.json", append=False):
         self._sparse = {}
         self._cumulated = {}
         super().__init__(self._sparse, self._cumulated)
 
         self.filename = _format_filename(filename)
-        assert not os.path.exists(self.filename)
-        self.file = open(self.filename, "w")
-        self.history = _CheckPointFileWrapper([], filename=filename)
+        if os.path.exists(self.filename):
+            assert append, "{} already exists, append option is necessary to continue"
+            self.file = open(self.filename, "r+")
+            self.history = DataCollection._load_file_from_fp(self.file, self.filename)
+            self._cumulated.update(self.history[-1])
+        else:
+            self.file = open(self.filename, "w")
+            self.history = _CheckPointFileWrapper([], filename=self.filename)
 
     def __getitem__(self, key):
         if isinstance(key, tuple):
@@ -106,7 +107,7 @@ class DataCollection(ChainMap, _Provider):
         sparse = self._sparse
         cumulated = self._cumulated
         # Write sparse to file
-        json.dump(sparse, self.file, separators=(',',':'))
+        djson_dump(sparse, self.file, separators=(',',':'))
         self.file.write("\n")
         self.file.flush()
         # Update cumulated and history with a frozen version

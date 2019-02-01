@@ -17,18 +17,7 @@ def remove_comments(jsonc_string):
     return jsonc_string
 
 
-def loads_jsonc(s):
-    s = remove_comments(s)
-    s = json.loads(s)
-    return s
-
-
-def load_jsonc(fp):
-    return loads_jsonc(fp.read())
-
-
-def _copy(json, *, root, utils):
-    qualname = json["_copy"]
+def _copy(qualname, root):
     elem = root
     for n in qualname.split("."):
         if isinstance(elem, dict):
@@ -38,27 +27,68 @@ def _copy(json, *, root, utils):
         else:
             raise NotImplementedError()
     return elem
-_utils = dict(_copy=_copy)
+def _tuple(value, root):
+    return tuple(value)
+def _dict(value, root):
+    return dict(value)
+_djson_utils = dict(_copy=_copy, _tuple=_tuple, _dict=_dict)
 
 
-def preprocess(json, root=None, utils=_utils):
-    """Should be called first on JSON-loaded dict (contains only dict and lists)
-    This is simply meant to add some syntactic sugar.
-    """
-    if root is None:
-        root = json
-    if isinstance(json, dict):
-        if len(json) == 1:
-            k = next(iter(json))
-            if k in utils:
-                return utils[k](json, root=root, utils=utils)
-        parsed = {}
-        for k, v in json.items():
-            parsed[k] = preprocess(v, root=root, utils=utils)
-        return parsed
-    elif isinstance(json, list):
-        return [preprocess(l, root=root, utils=utils) for l in json]
-    return json
+class DJSON:
+    @staticmethod
+    def from_json(json, root=None):
+        if root is None:
+            root = json
+        if isinstance(json, dict):
+            if len(json) == 1:
+                k = next(iter(json))
+                util = _djson_utils.get(k, None)
+                if util is not None:
+                    return util(DJSON.from_json(json[k], root))
+            parsed = {}
+            for k, v in json.items():
+                parsed[k] = DJSON.from_json(v, root)
+            return parsed
+        if isinstance(json, list):
+            return [DJSON.from_json(el, root) for el in json]
+        return json
+
+    @staticmethod
+    def to_json(djson):
+        if isinstance(djson, dict):
+            if any(not isinstance(k, str) for k in djson):
+                return {"_dict": [(DJSON.to_json(k), DJSON.to_json(v))
+                                for k, v in djson.items()
+                                ]}
+            else:
+                transformed = {}
+                for k, v in djson.items():
+                    transformed[k] = DJSON.to_json(v)
+                return transformed
+        if isinstance(djson, list):
+            return [DJSON.to_json(el) for el in djson]
+        if isinstance(djson, tuple):
+            return  {"_tuple": DJSON.to_json(list(djson))}
+        return djson
+
+
+def djsonc_loads(s, **kwargs):
+    s = remove_comments(s)
+    s = json.loads(s, **kwargs)
+    s = DJSON.from_json(s)
+    return s
+
+def djson_dumps(s, **kwargs):
+    s = DJSON.to_json(s)
+    s = json.dumps(s, **kwargs)
+    return s
+
+
+def djsonc_load(fp, **kwargs):
+    return djsonc_loads(fp.read(), **kwargs)
+
+def djson_dump(s, fp, **kwargs):
+    return fp.write(djson_dumps(s, **kwargs))
 
 
 def update_dict(dic, update):
@@ -195,47 +225,3 @@ class Call(dict):
         if partial:
             lambda *args, **kwargs: callee(*args, **kwargs)
         return callee(*args, **kwargs)
-
-    # def __repr__(self):
-    #     kwargs = args = partial = ""
-    #     if self["args"]:
-    #         args = ".with_args({})".format(", ".join(repr(arg)
-    #                                                  for arg in self["args"]))
-    #     if self["kwargs"]:
-    #         kwargs = "({})".format(", ".join("{}={!r}".format(k, v)
-    #                                          for k, v in self["kwargs"].items()))
-    #     if self["partial"]:
-    #         partial = ".partial()"
-    #     return "Call({}.{}){}{}{}".format(self["module"], self["fun"],
-    #                                       args, kwargs, partial)
-
-    # def __str__(self):
-    #     s = ["Call({}.{})".format(self["module"], self["fun"])]
-    #     indentation = " "*3
-    #     nl_indent = "\n{}".format(indentation)
-    #     if self["kwargs"]:
-    #         s.append("(")
-    #         s.append(nl_indent)
-    #         for k, v in self["kwargs"].items():
-    #             _v = str(v) \
-    #                 if isinstance(v, Call) \
-    #                 else repr(v)
-    #             head = k+"="
-    #             s.append(head)
-    #             _nl_indent = nl_indent + " "*len(head)
-    #             s.append(nl_indent.join(_v.split("\n")))
-    #             s.append(",\n" + indentation)
-    #         s[-1] = s[-1][1:-1]  # remove comma and space
-    #         s.append(")")
-    #     if self["args"]:
-    #         s.append(".with_args(")
-    #         s.append(nl_indent)
-    #         for arg in self["args"]:
-    #             _v = str(arg) if isinstance(arg, Call) else repr(arg)
-    #             s.append(nl_indent.join(_v.split("\n")))
-    #             s.append(",\n" + indentation)
-    #         s[-1] = s[-1][1:-1]  # remove comma and space
-    #         s.append(")")
-    #     if self["partial"]:
-    #         s.append(".partial()")
-    #     return "".join(s)

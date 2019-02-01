@@ -1,3 +1,4 @@
 __*
+!__init__.py
 dist/*
 mlworkflow.egg-info

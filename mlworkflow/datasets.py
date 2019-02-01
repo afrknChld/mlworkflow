@@ -346,8 +346,9 @@ class CachedDataset(Dataset):
         self.dataset = dataset
         self.cache = {}
 
-    def list_keys(self):
+    def _unforgotten_list_keys(self):
         return self.dataset.list_keys()
+    list_keys = _unforgotten_list_keys
 
     def query_item(self, key):
         tup = self.cache.get(key, None)
@@ -434,14 +435,8 @@ class PickledDataset(Dataset):
             pass
 
         if offset_keys:
-            def list_keys():
-                return self.index.values()
-            self.list_keys = list_keys()
-
-            def query_item(key):
-                self.file_handler.seek(key)
-                return self.unpickler.load()
-            self.query_item = query_item
+            self.list_keys = self._offset_list_keys
+            self.query_item = self._default_query_item
 
     def __getstate__(self):
         return (self.file_handler.name, self.offset_keys)
@@ -449,14 +444,21 @@ class PickledDataset(Dataset):
     def __setstate__(self, state):
         self.__init__(*state)
 
-    def list_keys(self):
+    def _default_list_keys(self):
         return self.index.keys()
+    def _offset_list_keys(self):
+        return self.index.values()
+    list_keys = _default_list_keys
 
-    def query_item(self, key):
+    def _default_query_item(self, key):
         self.file_handler.seek(self.index[key])
         ret = self.unpickler.load()
         self.unpickler.memo.clear()
         return ret
+    def _offset_query_item(self, key):
+        self.file_handler.seek(key)
+        return self.unpickler.load()
+    query_item = _default_query_item
 
     def optimize_query_order(self, dataset):
         if not self.offset_keys:
@@ -591,7 +593,9 @@ try:
 
             return np.array_equal(self.array, other.array)
 except ImportError:
-    pass
+    class BloscItem:
+        def __init__(self, array):
+            import blosc
 
 
 class DictDataset(Dataset):

@@ -1,4 +1,4 @@
-from experiment.json_handling import Call
+from mlworkflow.json_handling import Call
 
 from abc import ABCMeta, abstractproperty, abstractmethod
 import numpy as np
@@ -122,6 +122,7 @@ class PickleSaver(DataSaver):
 
 
 try:
+    #pylint: disable=no-member
     import cv2
     class ImageSaver(DataSaver):
         name = "png"
