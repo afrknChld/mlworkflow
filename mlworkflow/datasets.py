@@ -561,41 +561,40 @@ def pickle_or_load(dataset, path, keys=None, *, check_first_n_items=1, overwrite
 
 try:
     import blosc
-
-    class BloscItem:
-        config = (9, "blosclz", True)
-
-        def __init__(self, array):
-            self.array = array
-
-        def __reduce__(self):
-            _clevel, _cname, _shuffle = BloscItem.config
-            a = np.ascontiguousarray(self.array)
-            shape, size, dtype = a.shape, a.size, a.dtype
-            compressed = blosc.compress_ptr(a.__array_interface__['data'][0], size,
-                                            typesize=dtype.itemsize, clevel=_clevel,
-                                            cname=_cname, shuffle=_shuffle)
-            return BloscItem.unpickle, (shape, dtype, compressed,)
-
-        @staticmethod
-        def unpickle(shape, dtype, compressed):
-            return BloscItem.decompress(shape, dtype, compressed)
-
-        @staticmethod
-        def decompress(shape, dtype, compressed):
-            array = np.empty(shape, dtype=dtype)
-            blosc.decompress_ptr(compressed, array.__array_interface__['data'][0])
-            return BloscItem(array)
-
-        def __eq__(self, other):
-            if not isinstance(other, BloscItem):
-                return False
-
-            return np.array_equal(self.array, other.array)
 except ImportError:
-    class BloscItem:
-        def __init__(self, array):
-            import blosc
+    pass
+
+
+class BloscItem:
+    config = (9, "blosclz", True)
+
+    def __init__(self, array):
+        self.array = array
+
+    def __reduce__(self):
+        _clevel, _cname, _shuffle = BloscItem.config
+        a = np.ascontiguousarray(self.array)
+        shape, size, dtype = a.shape, a.size, a.dtype
+        compressed = blosc.compress_ptr(a.__array_interface__['data'][0], size,
+                                        typesize=dtype.itemsize, clevel=_clevel,
+                                        cname=_cname, shuffle=_shuffle)
+        return BloscItem.unpickle, (shape, dtype, compressed,)
+
+    @staticmethod
+    def unpickle(shape, dtype, compressed):
+        return BloscItem.decompress(shape, dtype, compressed)
+
+    @staticmethod
+    def decompress(shape, dtype, compressed):
+        array = np.empty(shape, dtype=dtype)
+        blosc.decompress_ptr(compressed, array.__array_interface__['data'][0])
+        return BloscItem(array)
+
+    def __eq__(self, other):
+        if not isinstance(other, BloscItem):
+            return False
+
+        return np.array_equal(self.array, other.array)
 
 
 class DictDataset(Dataset):

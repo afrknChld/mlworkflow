@@ -69,7 +69,8 @@ class DataCollection(ChainMap, _Provider):
 
         self.filename = _format_filename(filename)
         if os.path.exists(self.filename):
-            assert append, "{} already exists, append option is necessary to continue"
+            assert append, ("{} already exists, append option is necessary to continue"
+                            .format(self.filename))
             self.file = open(self.filename, "r+")
             self.history = DataCollection._load_file_from_fp(self.file, self.filename)
             self._cumulated.update(self.history[-1])

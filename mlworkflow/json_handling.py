@@ -44,7 +44,7 @@ class DJSON:
                 k = next(iter(json))
                 util = _djson_utils.get(k, None)
                 if util is not None:
-                    return util(DJSON.from_json(json[k], root))
+                    return util(DJSON.from_json(json[k], root), root)
             parsed = {}
             for k, v in json.items():
                 parsed[k] = DJSON.from_json(v, root)
@@ -57,9 +57,9 @@ class DJSON:
     def to_json(djson):
         if isinstance(djson, dict):
             if any(not isinstance(k, str) for k in djson):
-                return {"_dict": [(DJSON.to_json(k), DJSON.to_json(v))
-                                for k, v in djson.items()
-                                ]}
+                return {"_dict": [[DJSON.to_json(k), DJSON.to_json(v)]
+                                  for k, v in djson.items()
+                                  ]}
             else:
                 transformed = {}
                 for k, v in djson.items():
@@ -78,9 +78,9 @@ def djsonc_loads(s, **kwargs):
     s = DJSON.from_json(s)
     return s
 
-def djson_dumps(s, **kwargs):
+def djson_dumps(s, separators=(',',':'), **kwargs):
     s = DJSON.to_json(s)
-    s = json.dumps(s, **kwargs)
+    s = json.dumps(s, separators=separators, **kwargs)
     return s
 
 
