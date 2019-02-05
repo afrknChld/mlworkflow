@@ -1,4 +1,6 @@
-from bokeh.models import InputWidget, String, Instance, Callback
+from bokeh.models import InputWidget
+from bokeh.core.properties import String, Instance
+from bokeh.models.callbacks import Callback
 
 
 class TextArea(InputWidget):
