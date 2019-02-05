@@ -1,8 +1,13 @@
+from mlworkflow.file_handling import _format_filename
+from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
 from collections import deque
-from multiprocessing.pool import ThreadPool
+from functools import wraps
+import pickle
+import os
 
 _no_value = object()
+gen_id = _format_filename
 
 
 class DictObject(dict):
@@ -56,6 +61,22 @@ class DictObject(dict):
             klass = DictObject
         target = klass.from_dict(items)
         return target
+
+
+def pickle_cache(name):
+    def _decorator(f):
+        @wraps(f)
+        def wrapper(**kwargs):
+            filename = name.format(**kwargs)
+            if os.path.exists(filename):
+                with open(filename, "rb") as file:
+                    return pickle.load(file)
+            result = f(**kwargs)
+            with open(filename, "wb") as file:
+                pickle.dump(result, file)
+            return result
+        return wrapper
+    return _decorator
 
 
 class SideRunner:

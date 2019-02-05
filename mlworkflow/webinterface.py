@@ -5,6 +5,7 @@ from bokeh.models.widgets import Div
 from experiment import find_files
 from types import ModuleType
 from bokeh.io.doc import set_curdoc
+import sys
 import os
 
 from bokeh.io import curdoc
@@ -35,9 +36,12 @@ def dispatcher(filenames):
             with open(app, "r") as file:
                 source = file.read()
             set_curdoc(doc)
-            module = ModuleType(app[:-3].replace("/", "."))
+            module_name = app[:-3].replace("/", ".")
+            module = ModuleType(module_name)
+            sys.modules[module_name] = module
             module.__file__ = app
             exec(source, module.__dict__)
+            del sys.modules[module_name]
     return dispatch
 
 if __name__ == '__main__':

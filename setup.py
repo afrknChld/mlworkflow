@@ -13,5 +13,5 @@ setup(
     description="A workflow-improving library for manipulating ML experiments",
     long_description_content_type="text/markdown",
     packages=find_packages(include=("mlworkflow",)),
-    install_requires=["numpy", "tqdm", "blosc"],
+    install_requires=["numpy", "tqdm"],
 )
