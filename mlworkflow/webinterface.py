@@ -2,7 +2,7 @@ import argparse
 import bokeh
 from bokeh.server.server import Server
 from bokeh.models.widgets import Div
-from experiment import find_files
+from mlworkflow.file_handling import find_files
 from types import ModuleType
 from bokeh.io.doc import set_curdoc
 import sys
