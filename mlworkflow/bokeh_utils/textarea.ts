@@ -37,6 +37,7 @@ export class TextAreaView extends InputWidgetView {
       name: this.model.name,
       disabled: this.model.disabled,
       placeholder: this.model.placeholder,
+      style: {minWidth:"90%", minHeight:"100%"},
     }, this.model.value)
     this.inputEl.addEventListener("change", () => this.change_input())
     this.el.appendChild(this.inputEl)
