@@ -1,7 +1,7 @@
 from mlworkflow.data_freezing import (CallFreezer, ImageSaver, Pickleb64Freezer,
     PickleSaver, RelModulesFreezer)
 from mlworkflow.file_handling import _format_filename
-from mlworkflow.json_handling import djson_dump, djsonc_loads
+from mlworkflow.json_handling import djson_dump, djson_loads
 from abc import ABCMeta, abstractmethod
 from collections import ChainMap
 from functools import wraps
@@ -35,7 +35,7 @@ class DataCollection(ChainMap, _Provider):
             s = file.readline()
             if not s:
                 break
-            yield djsonc_loads(s)
+            yield djson_loads(s)
 
     def get_metadata(self):
         filename = self.filename if isinstance(self, DataCollection) else self
@@ -90,6 +90,7 @@ class DataCollection(ChainMap, _Provider):
         if isinstance(key, list):
             assert len(key) == len(value)
             for k, v in zip(key, value):
+                assert isinstance(k, str)
                 super().__setitem__(k, v)
         else:
             assert isinstance(key, str)

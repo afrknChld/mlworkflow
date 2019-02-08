@@ -78,14 +78,23 @@ def djsonc_loads(s, **kwargs):
     s = DJSON.from_json(s)
     return s
 
+def djsonc_load(fp, **kwargs):
+    return djsonc_loads(fp.read(), **kwargs)
+
+
+def djson_loads(s, **kwargs):
+    s = json.loads(s, **kwargs)
+    s = DJSON.from_json(s)
+    return s
+
+def djson_load(fp, **kwargs):
+    return djson_loads(fp.read(), **kwargs)
+
+
 def djson_dumps(s, separators=(',',':'), **kwargs):
     s = DJSON.to_json(s)
     s = json.dumps(s, separators=separators, **kwargs)
     return s
-
-
-def djsonc_load(fp, **kwargs):
-    return djsonc_loads(fp.read(), **kwargs)
 
 def djson_dump(s, fp, **kwargs):
     return fp.write(djson_dumps(s, **kwargs))
