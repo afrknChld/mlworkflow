@@ -1,5 +1,5 @@
-from mlworkflow.json_handling import (Call, DJSON, djson_dump, djson_dumps,
-    djsonc_load, djsonc_loads, eval_json, update_dict)
+from mlworkflow.json_handling import (Call, jsonc_load, jsonc_loads, DJSON,
+    djson_dump, djson_dumps, djsonc_load, djsonc_loads, eval_json, update_dict)
 # from mlworkflow.data_freezing import *  # requires mlworkflow.json_handling
 from mlworkflow.file_handling import find_files
 from mlworkflow.data_collection import DataCollection  # requires data_freezing, json_handling and file_handling

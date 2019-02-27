@@ -71,6 +71,13 @@ class DJSON:
             return  {"_tuple": DJSON.to_json(list(djson))}
         return djson
 
+def jsonc_loads(s, **kwargs):
+    s = remove_comments(s)
+    s = json.loads(s, **kwargs)
+    return s
+
+def jsonc_load(fp, **kwargs):
+    return jsonc_loads(fp.read(), **kwargs)
 
 def djsonc_loads(s, **kwargs):
     s = remove_comments(s)
@@ -152,7 +159,7 @@ def _resolve_calls(json, env):
     if isinstance(json, dict):
         parsed = {}
         for k, v in json.items():
-            parsed[k] = eval_json(v, env)
+            parsed[k] = _resolve_calls(v, env)
         call = parsed.pop("_call", None)
         if call is not None:
             if call.startswith("!"):
@@ -223,7 +230,7 @@ class Call(dict):
         return eval_json(json, dict(**env, Call=Call))
 
     def eval(self, env={}):
-        """Evaluate a Call"""
+        """Evaluate Calls within a dict structure"""
         return eval_json(self, dict(**env, Call=Call._eval_call))
 
     @staticmethod
