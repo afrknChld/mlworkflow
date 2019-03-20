@@ -45,7 +45,7 @@ def imports(**redirections):
 
 class TimeCapsule:
     def __init__(self, base, dirname, files="*"):
-        self.base = os.path.dirname(base)
+        self.base = os.path.dirname(base) if base.endswith(".py") else base
         self.target = _format_filename(dirname)
         self.base_target = os.path.join(self.base, self.target)
         self.files = files.split(",")

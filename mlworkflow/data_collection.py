@@ -2,18 +2,21 @@ from mlworkflow.data_freezing import (CallFreezer, ImageSaver, Pickleb64Freezer,
     PickleSaver, RelModulesFreezer)
 from mlworkflow.file_handling import _format_filename
 from mlworkflow.json_handling import djson_dump, djson_loads
-from abc import ABCMeta, abstractmethod
 from collections import ChainMap
 from functools import wraps
 import os
 
 
-class _Provider(metaclass=ABCMeta):
+class _Provider:
     call = property(CallFreezer)
     image = png = property(ImageSaver)
     modules = property(RelModulesFreezer)
     pickle = property(PickleSaver)
     pickleb64 = property(Pickleb64Freezer)
+
+    @property
+    def dirname(self):
+        return os.path.dirname(self.filename)
 
 
 class DataCollection(ChainMap, _Provider):
@@ -118,11 +121,6 @@ class DataCollection(ChainMap, _Provider):
         self.history.append(_CheckPointWrapper(frozen))
         sparse.clear()
 
-    @property
-    def dirname(self):
-        self.__dict__["dirname"] = os.path.dirname(self.filename)
-        return self.dirname
-
 
 class _CheckPointWrapper(dict):
     """"Add multiple and optional selections for a dict """
@@ -153,8 +151,3 @@ class _CheckPointFileWrapper(list, _Provider):
             return super().__getitem__(key0)[key1]
         return super().__getitem__(key)
 
-    @property
-    def dirname(self):
-        dirname = os.path.dirname(self.filename)
-        self.__dict__["dirname"] = dirname
-        return dirname

@@ -74,7 +74,7 @@ class Pickleb64Freezer(DataFreezer):
 class RelModulesFreezer(DataFreezer):
     name = "modules"
     def freeze(self, key, value):
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, (set, list, tuple)):
             value = {v: v for v in value}
         assert isinstance(value, dict)
         return {"modules": value}

@@ -7,5 +7,5 @@ from mlworkflow.datasets import (AugmentedDataset, BloscItem, CachedDataset,
     CacheLastDataset, Dataset, DictDataset, FilteredDataset, pickle_or_load,
     PickledDataset, TransformedDataset)
 from mlworkflow.miscellaneous import (DictObject, gen_id, pickle_cache, seed,  # needs file_handling
-    SideRunner)
+    SideRunner, Register)
 from mlworkflow.versioning import imports, TimeCapsule # needs file_handling

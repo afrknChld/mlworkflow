@@ -131,3 +131,27 @@ def seed(random, seed):
         random.setstate(old_state)
     else:
         raise Exception("Random object not recognized")
+
+
+class Register(dict):
+    """Keeps track of registered functions.
+
+    Only the functions declared at the top level of a non-main top level module
+    will be registered, the others will be skipped. (this is to avoid replayed
+    modules to register again a function)
+
+    Finally, functions names must be unique.
+    """
+    def __init__(self):
+        self.modules = set()
+
+    def __call__(self, f):
+        module_name = f.__module__
+        if module_name == "__main__" or "." in module_name:
+            return f
+        function_name = f.__qualname__
+        assert function_name not in self
+        # Keep track of the modules registering functions
+        self.modules.add(module_name)
+        self[function_name] = f
+        return f
