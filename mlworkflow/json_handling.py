@@ -1,4 +1,5 @@
 from importlib import import_module
+import functools
 import json
 import re
 
@@ -239,5 +240,7 @@ class Call(dict):
         for f in fun.split("."):
             callee = getattr(callee, f)
         if partial:
-            lambda *args, **kwargs: callee(*args, **kwargs)
+            if partial == "lambda":
+                return lambda *args, **kwargs: callee(*args, **kwargs)
+            return functools.partial(callee, *args, **kwargs)
         return callee(*args, **kwargs)
