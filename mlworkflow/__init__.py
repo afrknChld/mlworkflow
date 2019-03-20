@@ -5,7 +5,9 @@ from mlworkflow.file_handling import find_files
 from mlworkflow.data_collection import DataCollection  # requires data_freezing, json_handling and file_handling
 from mlworkflow.datasets import (AugmentedDataset, BloscItem, CachedDataset,
     CacheLastDataset, Dataset, DictDataset, FilteredDataset, pickle_or_load,
-    PickledDataset, TransformedDataset)
+    PickledDataset, TransformedDataset, chunkify)
 from mlworkflow.miscellaneous import (DictObject, gen_id, pickle_cache, seed,  # needs file_handling
     SideRunner, Register)
 from mlworkflow.versioning import imports, TimeCapsule # needs file_handling
+
+from mlworkflow import utils  # Quick legacy access
