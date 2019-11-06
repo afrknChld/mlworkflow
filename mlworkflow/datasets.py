@@ -490,9 +490,12 @@ def _close(path):
 
 
 @functools.wraps(open)
-def _open_once(path, *args, **kwargs):
-    _close(path)
-    ret = _open_pickles[path] = open(path, *args, **kwargs)
+def _open_once(path, *args, close, **kwargs):
+    if close or path not in _open_pickles:
+        _close(path)
+        ret = _open_pickles[path] = open(path, *args, **kwargs)
+    else:
+        ret = _open_pickles[path]
     return ret
 
 
@@ -512,13 +515,13 @@ def pickle_or_load(dataset, path, keys=None, *, check_first_n_items=1, overwrite
         if before_pickling is not None:
             before_pickling()
         try:
-            with _open_once(path, "wb") as file:
+            with _open_once(path, "wb", close=True) as file:
                 PickledDataset.create(dataset, file, keys=keys)
         except BaseException as exc:  # catch ALL exceptions
             if file is not None:  # if the file has been created, it is partial
                 os.remove(path)
             raise
-    opened_dataset = PickledDataset(_open_once(path, "rb"))
+    opened_dataset = PickledDataset(_open_once(path, "rb", close=False))
     if keys is None:
         keys = dataset.list_keys()
     chunk = next(chunkify(keys, check_first_n_items))
