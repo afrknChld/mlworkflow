@@ -66,19 +66,21 @@ class Dataset(metaclass=ABCMeta):
         first = self.query_item(key0)
         if wrap:
             first = (first,)
-        width = range(len(first))
+        assert isinstance(first, dict), "A dataset item must be a dictionary"
+        item_keys = first.keys()
+        #width = range(len(first))
 
-        XYs = [[None]*len(keys) for j in width]
-        for j in width:
-            XYs[j][0] = first[j]
+        XYs = {item_key: [None]*len(keys) for item_key in item_keys}
+        for item_key in item_keys:
+            XYs[item_key][0] = first[item_key]
 
         for i, key in iterator:
             item = self.query_item(key)
             if wrap:
                 item = (item,)
-            for j in width:
-                XYs[j][i] = item[j]
-        return tuple(np.array(Xs) for Xs in XYs)
+            for item_key in item_keys:
+                XYs[item_key][i] = item[item_key]
+        return {k:np.array(v) for k,v in XYs.items()}
 
     def batches(self, keys, batch_size, **kwargs):
         """Compute batches to make one epoch of the given keys
@@ -416,6 +418,8 @@ class PickledDataset(Dataset):
         pickler.dump(index_location)
 
     def __init__(self, file_handler, offset_keys=False):
+        if file_handler == "/export/share/rossi/master_thesis/datasets/gva/instants_dataset.pickle":
+            file_handler = "/home/vanzandycke/datasets/gva/instants_dataset.pickle"
         if isinstance(file_handler, str):
             file_handler = open(file_handler, "rb")
         self.file_handler = file_handler
